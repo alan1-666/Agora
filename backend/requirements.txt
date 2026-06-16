@@ -1,0 +1,6 @@
+# 阶段 0：能流式对话的单 agent（暂不引 LangGraph / DB，阶段 1、2 再加）
+fastapi>=0.115
+uvicorn[standard]>=0.32
+anthropic>=0.40
+pydantic-settings>=2.6
+python-dotenv>=1.0
