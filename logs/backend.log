@@ -1,4 +1,4 @@
-2026/06/16 21:41:40 db connected + schema ready
+2026/06/16 22:52:41 db connected + schema ready
 [GIN-debug] [WARNING] Creating an Engine instance with the Logger and Recovery middleware already attached.
 
 [GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
@@ -19,8 +19,10 @@
 [GIN-debug] POST   /api/chat/stream          --> agora/internal/server.(*Server).chatStream-fm (4 handlers)
 [GIN-debug] POST   /api/auth/claude/start    --> agora/internal/server.(*Server).claudeStart-fm (4 handlers)
 [GIN-debug] POST   /api/auth/claude/finish   --> agora/internal/server.(*Server).claudeFinish-fm (4 handlers)
-2026/06/16 21:41:40 listening on :8000
+2026/06/16 22:52:41 listening on :8000
 [GIN-debug] [WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.
 Please check https://github.com/gin-gonic/gin/blob/master/docs/doc.md#dont-trust-all-proxies for details.
 [GIN-debug] Listening and serving HTTP on :8000
-[GIN] 2026/06/16 - 21:41:54 | 200 |   48.5µs |             ::1 | GET      "/health"
+[GIN] 2026/06/16 - 22:52:42 | 200 |   5.04ms |             ::1 | GET      "/api/org/key"
+[GIN] 2026/06/16 - 22:53:01 | 200 | 524.042µs |             ::1 | GET      "/health"
+[GIN] 2026/06/16 - 22:53:01 | 200 |    300µs |             ::1 | POST     "/api/auth/claude/start"

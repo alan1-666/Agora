@@ -53,7 +53,9 @@ func BuildAuthorizeURL(challenge, state string) string {
 	q.Set("code_challenge", challenge)
 	q.Set("code_challenge_method", "S256")
 	q.Set("state", state)
-	return AuthorizeURL + "?" + q.Encode()
+	// 注意:url.Values.Encode 把空格编码成 '+',但 URL 查询里 '+' 是字面加号,
+	// claude.ai 会把 scope 解析坏(Invalid request format)。改成 %20(各值无字面 '+',安全)。
+	return AuthorizeURL + "?" + strings.ReplaceAll(q.Encode(), "+", "%20")
 }
 
 type Tokens struct {
