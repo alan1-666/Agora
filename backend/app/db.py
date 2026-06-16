@@ -55,7 +55,8 @@ async def init_db() -> None:
                 f"CREATE ROLE {_APP_ROLE} LOGIN PASSWORD '{_APP_PWD}'; END IF; END $$;"
             )
         )
-        # 2) 建表
+        # 2) 启用 pgvector 扩展 + 建表
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
         # 3) 授权给运行时角色
         await conn.execute(text(f"GRANT USAGE ON SCHEMA public TO {_APP_ROLE}"))

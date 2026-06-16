@@ -24,5 +24,5 @@ def test_unknown_tool():
 
 def test_spec_format():
     spec = anthropic_tools_spec(ALL_TOOL_NAMES)
-    assert len(spec) == 3
+    assert len(spec) == len(ALL_TOOL_NAMES) >= 4  # calculator/current_time/text_stats/remember
     assert all({"name", "description", "input_schema"} <= set(t) for t in spec)

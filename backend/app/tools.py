@@ -92,6 +92,18 @@ REGISTRY: dict[str, Tool] = {
         },
         run=_text_stats,
     ),
+    # remember 是"有状态"工具:把一条事实存为长期记忆。它的执行需要 org 上下文,
+    # 由上层注入的 tool_runner 处理(见 main.py),这里的 run 仅作兜底说明。
+    "remember": Tool(
+        name="remember",
+        description="把一条值得长期记住的信息(用户偏好、背景、约定等)存入记忆,以后跨会话可回忆。",
+        input_schema={
+            "type": "object",
+            "properties": {"fact": {"type": "string", "description": "要记住的内容"}},
+            "required": ["fact"],
+        },
+        run=lambda args: "(记忆需在会话上下文中执行)",
+    ),
 }
 
 ALL_TOOL_NAMES = list(REGISTRY.keys())

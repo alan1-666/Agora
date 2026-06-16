@@ -20,8 +20,9 @@ from .auth import AuthContext, get_auth
 from .config import settings
 from .crypto import decrypt, encrypt
 from .db import init_db, session_for_org
-from .models import Agent, Channel, Message, OrgApiKey
-from .tools import ALL_TOOL_NAMES
+from .models import Agent, Channel, Document, Message, OrgApiKey
+from .retrieval import add_memory, build_context, ingest_document, retrieve
+from .tools import ALL_TOOL_NAMES, run_tool
 
 
 @asynccontextmanager
@@ -189,6 +190,26 @@ async def list_tools():
     return [{"name": t.name, "description": t.description} for t in REGISTRY.values()]
 
 
+# ---------- 文档(RAG 资料) ----------
+
+class UploadDocRequest(BaseModel):
+    name: str
+    text: str
+
+
+@app.get("/api/documents")
+async def list_documents(auth: AuthContext = Depends(get_auth)):
+    async with session_for_org(auth.org_id) as s:
+        rows = (await s.execute(select(Document).order_by(Document.created_at.desc()))).scalars().all()
+        return [{"id": str(d.id), "name": d.name} for d in rows]
+
+
+@app.post("/api/documents")
+async def upload_document(req: UploadDocRequest, auth: AuthContext = Depends(get_auth)):
+    doc_id, n = await ingest_document(auth.org_id, req.name, req.text)
+    return {"id": doc_id, "name": req.name, "chunks": n}
+
+
 # ---------- 流式对话(经 agent,落库) ----------
 
 class ChatRequest(BaseModel):
@@ -252,11 +273,23 @@ async def chat_stream(req: ChatRequest, auth: AuthContext = Depends(get_auth)):
 
     api_key = await _org_api_key(org_id)
 
+    # 检索相关记忆 + 资料,注入 agent 的 system(RAG)
+    retrieved = await retrieve(org_id, req.content)
+    system_with_context = agent_system + build_context(retrieved)
+
+    # 有状态工具执行器:remember 写入长期记忆;其余走纯工具
+    async def tool_runner(name: str, args: dict):
+        if name == "remember":
+            await add_memory(org_id, str(args.get("fact", "")))
+            return "已记住"
+        return run_tool(name, args)
+
     # 2) 跑 agent loop(不持有数据库事务),转发事件
     async def gen() -> AsyncIterator[bytes]:
         answer = ""
         async for ev in run_agent(
-            history, agent_system, agent_tools, api_key=api_key, model=agent_model
+            history, system_with_context, agent_tools, api_key=api_key,
+            model=agent_model, tool_runner=tool_runner,
         ):
             if ev["type"] == "final":
                 # 最终文本已经在本轮通过 delta 流式推过了,这里只留作落库

@@ -12,6 +12,7 @@
 _stream_turn 单独抽出,测试时 monkeypatch 它来脚本化模型行为(离线、不发网络)。
 """
 
+import inspect
 from collections.abc import AsyncIterator
 
 from anthropic import AsyncAnthropic
@@ -53,8 +54,14 @@ async def run_agent(
     api_key: str | None,
     model: str | None = None,
     client=None,
+    tool_runner=None,
 ) -> AsyncIterator[dict]:
-    """跑完整 agent loop,逐个 yield 事件。"""
+    """跑完整 agent loop,逐个 yield 事件。
+
+    tool_runner: 可选的工具执行器 (name, args)->str(可同步或异步)。默认用 tools.run_tool;
+    上层可注入它来支持有状态工具(如 remember 需要 org/DB 上下文)。
+    """
+    runner = tool_runner or run_tool
     key = api_key or settings.anthropic_api_key
     if not key:
         yield {"type": "error", "message": "未配置模型 API key(BYO-key)。"}
@@ -82,7 +89,9 @@ async def run_agent(
         for block in final.content:
             if block.type == "tool_use":
                 yield {"type": "tool_call", "name": block.name, "input": block.input}
-                output = run_tool(block.name, block.input)
+                output = runner(block.name, block.input)
+                if inspect.isawaitable(output):
+                    output = await output
                 yield {"type": "tool_result", "name": block.name, "output": output}
                 tool_results.append(
                     {"type": "tool_result", "tool_use_id": block.id, "content": output}

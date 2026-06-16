@@ -29,6 +29,14 @@ export const listMessages = (channelId: string) =>
   req<ChatMessage[]>(`/api/channels/${channelId}/messages`);
 export const listAgents = () => req<Agent[]>("/api/agents");
 
+export type Doc = { id: string; name: string };
+export const listDocuments = () => req<Doc[]>("/api/documents");
+export const uploadDocument = (name: string, text: string) =>
+  req<{ id: string; name: string; chunks: number }>("/api/documents", {
+    method: "POST",
+    body: JSON.stringify({ name, text }),
+  });
+
 export const getKeyStatus = () =>
   req<{ configured: boolean; model: string | null }>("/api/org/key");
 export const setOrgKey = (api_key: string, model?: string) =>

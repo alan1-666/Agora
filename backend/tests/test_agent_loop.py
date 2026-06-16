@@ -63,6 +63,41 @@ async def test_agent_executes_tool_then_answers(monkeypatch):
     assert turn["n"] == 2, "应跑了两轮(调工具后再回模型)"
 
 
+async def test_custom_async_tool_runner(monkeypatch):
+    """注入的异步 tool_runner 应被 await 调用(remember 等有状态工具靠它)。"""
+    calls = []
+
+    async def my_runner(name, args):
+        calls.append((name, args))
+        return "ok-async"
+
+    turn = {"n": 0}
+
+    async def fake_stream_turn(client, model, system, messages, tools):
+        turn["n"] += 1
+        if turn["n"] == 1:
+            yield {"final": _msg([_tool("t1", "remember", {"fact": "用户爱简洁"})])}
+        else:
+            yield {"delta": "好的"}
+            yield {"final": _msg([_text("好的")])}
+
+    monkeypatch.setattr(agentmod, "_stream_turn", fake_stream_turn)
+    events = [
+        e
+        async for e in run_agent(
+            [{"role": "user", "content": "记住我爱简洁"}],
+            system_prompt="sys",
+            tool_names=["remember"],
+            api_key="dummy",
+            client=SimpleNamespace(),
+            tool_runner=my_runner,
+        )
+    ]
+    assert calls == [("remember", {"fact": "用户爱简洁"})]
+    tr = next(e for e in events if e["type"] == "tool_result")
+    assert tr["output"] == "ok-async"
+
+
 async def test_agent_without_key_errors():
     events = [
         e

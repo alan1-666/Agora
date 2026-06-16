@@ -11,7 +11,10 @@ import app.auth as auth
 from app.config import settings
 from app.db import _admin_engine, init_db
 
-_TABLES = "messages, channels, agents, org_api_keys, memberships, users, organizations"
+_TABLES = (
+    "messages, channels, agents, document_chunks, documents, memories, "
+    "org_api_keys, memberships, users, organizations"
+)
 
 
 @pytest.fixture(autouse=True)

@@ -22,6 +22,9 @@ function ClerkArea() {
 export default function AuthHeader() {
   return (
     <div className="flex items-center gap-3">
+      <Link href="/documents" className="text-sm text-neutral-300 hover:text-yellow-300">
+        资料库
+      </Link>
       <Link href="/settings" className="text-sm text-neutral-300 hover:text-yellow-300">
         设置
       </Link>

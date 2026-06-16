@@ -10,3 +10,4 @@ sqlalchemy[asyncio]>=2.0
 psycopg[binary]>=3.2        # Python 3.14 wheel 兼容比 asyncpg 好
 alembic>=1.13
 cryptography>=43            # 加密存储各组织的模型 API key
+pgvector>=0.3        # SQLAlchemy 向量列类型(RAG)

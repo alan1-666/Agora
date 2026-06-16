@@ -16,8 +16,13 @@ from sqlalchemy import (
     Text,
     func,
 )
+from pgvector.sqlalchemy import Vector
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+from .config import settings
+
+_DIM = settings.embedding_dim
 
 
 def _uuid() -> uuid.UUID:
@@ -147,6 +152,57 @@ class Message(Base):
     channel: Mapped["Channel"] = relationship(back_populates="messages")
 
 
+class Memory(Base):
+    """长期记忆条目(跨会话)。org 作用域表。embedding 用于按相关性检索。"""
+
+    __tablename__ = "memories"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    content: Mapped[str] = mapped_column(Text)
+    embedding: Mapped[list[float]] = mapped_column(Vector(_DIM))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class Document(Base):
+    """上传的资料(整篇)。org 作用域表。"""
+
+    __tablename__ = "documents"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(256))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    chunks: Mapped[list["DocumentChunk"]] = relationship(
+        back_populates="document", cascade="all, delete-orphan"
+    )
+
+
+class DocumentChunk(Base):
+    """资料切块 + 向量。org 作用域表。RAG 检索的单位。"""
+
+    __tablename__ = "document_chunks"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), index=True
+    )
+    doc_name: Mapped[str] = mapped_column(String(256))  # 反范式,检索时直接拿来标来源
+    seq: Mapped[int] = mapped_column(BigInteger)
+    content: Mapped[str] = mapped_column(Text)
+    embedding: Mapped[list[float]] = mapped_column(Vector(_DIM))
+
+    document: Mapped["Document"] = relationship(back_populates="chunks")
+
+
 # org 作用域表清单(供迁移生成 RLS policy / 应用层断言用)
 ORG_SCOPED_TABLES = [
     "memberships",
@@ -154,4 +210,7 @@ ORG_SCOPED_TABLES = [
     "agents",
     "channels",
     "messages",
+    "memories",
+    "documents",
+    "document_chunks",
 ]

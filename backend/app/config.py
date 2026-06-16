@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     model: str = "claude-sonnet-4-6"
     max_tokens: int = 2048
 
+    # --- 向量检索(RAG) ---
+    # local=本地哈希词袋(离线默认);生产可换 voyage/openai(需对应 key)。换 provider 要重嵌入。
+    embedding_provider: str = "local"
+    embedding_dim: int = 256  # 必须与向量列维度一致;换真 provider 时一并改 + 重建
+
     # 前端开发地址,用于 CORS
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
 
