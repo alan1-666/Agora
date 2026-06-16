@@ -10,7 +10,6 @@ import (
 
 	"agora/internal/agent"
 	"agora/internal/config"
-	"agora/internal/llm"
 	"agora/internal/orchestration"
 	"agora/internal/rag"
 	"agora/internal/store"
@@ -42,6 +41,7 @@ func (s *Server) Routes(r *gin.Engine) {
 	api.GET("/org/key", s.keyStatus)
 	api.PUT("/org/key", s.setKey)
 	api.POST("/chat/stream", s.chatStream)
+	s.registerOAuth(api)
 }
 
 // ---------- tools / agents ----------
@@ -297,15 +297,11 @@ func (s *Server) chatStream(c *gin.Context) {
 		system += rag.BuildContext(items)
 	}
 
-	// 鉴权:DB 里的凭证,否则兜底全局 key
-	auth, _ := s.st.GetAuth(c)
-	llmAuth := llm.Auth{Mode: auth.Mode, Secret: auth.Secret}
-	if llmAuth.Secret == "" && s.cfg.AnthropicKey != "" {
-		llmAuth = llm.Auth{Mode: "apikey", Secret: s.cfg.AnthropicKey}
-	}
+	// 鉴权:OAuth(自动刷新)或 API key,否则兜底全局 key
+	llmAuth := s.resolveAuth(c)
 	model := s.cfg.Model
-	if auth.Model != "" {
-		model = auth.Model
+	if st, _ := s.st.KeyStatus(c); st.Model != "" {
+		model = st.Model
 	}
 	if ag.Model != nil && *ag.Model != "" {
 		model = *ag.Model

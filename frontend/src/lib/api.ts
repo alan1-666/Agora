@@ -38,11 +38,19 @@ export const uploadDocument = (name: string, text: string) =>
   });
 
 export const getKeyStatus = () =>
-  req<{ configured: boolean; model: string | null }>("/api/org/key");
+  req<{ configured: boolean; kind?: string; model: string | null }>("/api/org/key");
 export const setOrgKey = (api_key: string, model?: string) =>
   req<{ ok: boolean }>("/api/org/key", {
     method: "PUT",
     body: JSON.stringify({ api_key, model }),
+  });
+
+// Claude 订阅 OAuth 登录(免 API key)
+export const claudeStart = () => req<{ url: string }>("/api/auth/claude/start", { method: "POST" });
+export const claudeFinish = (code: string) =>
+  req<{ ok: boolean }>("/api/auth/claude/finish", {
+    method: "POST",
+    body: JSON.stringify({ code }),
   });
 
 // 流式对话事件:文本增量 / 工具调用 / 工具结果 / 错误。

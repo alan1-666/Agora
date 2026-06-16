@@ -99,6 +99,26 @@ func (s *Store) SetAPIKey(ctx context.Context, plainKey, model string) error {
 	return s.upsertCred(ctx, `kind='apikey', secret=$1, model=$2`, enc, model)
 }
 
+// OAuthCreds 返回解密的 OAuth 凭证(供刷新用)。isOAuth=false 表示当前不是 OAuth 模式。
+func (s *Store) OAuthCreds(ctx context.Context) (refresh string, expiry int64, model string, isOAuth bool, err error) {
+	r, err := s.readCred(ctx)
+	if err != nil || r == nil {
+		return "", 0, "", false, err
+	}
+	if r.kind != "oauth" || r.oauthRefresh == nil || *r.oauthRefresh == "" {
+		return "", 0, "", false, nil
+	}
+	ref, err := s.cipher.Decrypt(*r.oauthRefresh)
+	if err != nil {
+		return "", 0, "", false, err
+	}
+	m := ""
+	if r.model != nil {
+		m = *r.model
+	}
+	return ref, r.oauthExpiry, m, true, nil
+}
+
 // SetOAuth 存 OAuth token(加密)。Task 16 登录后调用。
 func (s *Store) SetOAuth(ctx context.Context, access, refresh string, expiry int64, model string) error {
 	ea, err := s.cipher.Encrypt(access)
