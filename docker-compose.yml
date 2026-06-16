@@ -9,7 +9,8 @@ services:
       POSTGRES_PASSWORD: agora
       POSTGRES_DB: agora
     ports:
-      - "5432:5432"
+      # 用 5433 避开本机已占用 5432 的 homebrew postgres
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 
