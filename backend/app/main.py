@@ -21,8 +21,9 @@ from .config import settings
 from .crypto import decrypt, encrypt
 from .db import init_db, session_for_org
 from .models import Agent, Channel, Document, Message, OrgApiKey
-from .retrieval import add_memory, build_context, ingest_document, retrieve
-from .tools import ALL_TOOL_NAMES, run_tool
+from .orchestration import make_tool_runner
+from .retrieval import build_context, ingest_document, retrieve
+from .tools import ALL_TOOL_NAMES
 
 
 @asynccontextmanager
@@ -146,17 +147,42 @@ def _agent_dict(a: Agent) -> dict:
     }
 
 
-async def _ensure_default_agent(s, org_id: str) -> Agent:
-    """组织没有 agent 时,种一个默认"助手"(启用全部工具)。"""
-    a = Agent(
+# 工人 agent 用除 delegate 外的所有工具;协调者用 delegate(+remember)负责拆活
+_WORKER_TOOLS = [t for t in ALL_TOOL_NAMES if t != "delegate"]
+
+
+async def _seed_default_agents(s, org_id: str) -> list[Agent]:
+    """组织没有 agent 时,种两个默认:工人「助手」+「协调者」(演示多智能体)。"""
+    worker = Agent(
         org_id=org_id,
         name="助手",
         system_prompt="你是 Agora 里的 AI 助手。需要算数、查时间、统计文本时,调用对应工具,不要心算。",
-        tools=ALL_TOOL_NAMES,
+        tools=_WORKER_TOOLS,
     )
-    s.add(a)
+    coordinator = Agent(
+        org_id=org_id,
+        name="协调者",
+        system_prompt=(
+            "你是协调者。把复杂任务拆成子任务,用 delegate 工具委派给合适的下属 agent 完成,"
+            "再把结果汇总成清晰的最终答复。可委派的 agent 见下方花名册。"
+        ),
+        tools=["delegate", "remember"],
+    )
+    s.add_all([worker, coordinator])
     await s.commit()
-    return a
+    return [worker, coordinator]
+
+
+def _roster_text(agents: list[Agent], exclude_name: str) -> str:
+    """给协调者注入"花名册":有哪些 agent、各自擅长什么。"""
+    others = [a for a in agents if a.name != exclude_name]
+    if not others:
+        return ""
+    lines = ["", "【可委派的 agent 花名册】"]
+    for a in others:
+        snippet = (a.system_prompt or "")[:60]
+        lines.append(f"- {a.name}:{snippet}")
+    return "\n".join(lines)
 
 
 @app.get("/api/agents")
@@ -164,7 +190,7 @@ async def list_agents(auth: AuthContext = Depends(get_auth)):
     async with session_for_org(auth.org_id) as s:
         rows = (await s.execute(select(Agent).order_by(Agent.created_at))).scalars().all()
         if not rows:
-            rows = [await _ensure_default_agent(s, auth.org_id)]
+            rows = await _seed_default_agents(s, auth.org_id)
         return [_agent_dict(a) for a in rows]
 
 
@@ -243,14 +269,15 @@ async def chat_stream(req: ChatRequest, auth: AuthContext = Depends(get_auth)):
         if ch is None:
             raise HTTPException(404, "频道不存在或无权访问")
 
+        all_agents = (await s.execute(select(Agent).order_by(Agent.created_at))).scalars().all()
+        if not all_agents:
+            all_agents = await _seed_default_agents(s, org_id)
         if req.agent_id:
-            agent = (
-                await s.execute(select(Agent).where(Agent.id == req.agent_id))
-            ).scalar_one_or_none()
+            agent = next((a for a in all_agents if str(a.id) == req.agent_id), None)
         else:
-            agent = (await s.execute(select(Agent).order_by(Agent.created_at))).scalars().first()
+            agent = all_agents[0]
         if agent is None:
-            agent = await _ensure_default_agent(s, org_id)
+            agent = all_agents[0]
 
         seq = await _next_seq(s, req.channel_id)
         s.add(
@@ -269,6 +296,9 @@ async def chat_stream(req: ChatRequest, auth: AuthContext = Depends(get_auth)):
         agent_system = agent.system_prompt
         agent_tools = agent.tools or []
         agent_model = agent.model
+        # 协调者注入花名册,知道能委派给谁
+        if "delegate" in agent_tools:
+            agent_system += _roster_text(all_agents, agent.name)
         await s.commit()
 
     api_key = await _org_api_key(org_id)
@@ -277,12 +307,8 @@ async def chat_stream(req: ChatRequest, auth: AuthContext = Depends(get_auth)):
     retrieved = await retrieve(org_id, req.content)
     system_with_context = agent_system + build_context(retrieved)
 
-    # 有状态工具执行器:remember 写入长期记忆;其余走纯工具
-    async def tool_runner(name: str, args: dict):
-        if name == "remember":
-            await add_memory(org_id, str(args.get("fact", "")))
-            return "已记住"
-        return run_tool(name, args)
+    # 统一工具执行器:remember(记忆)/delegate(委派子 agent)/纯工具
+    tool_runner = make_tool_runner(org_id, api_key)
 
     # 2) 跑 agent loop(不持有数据库事务),转发事件
     async def gen() -> AsyncIterator[bytes]:

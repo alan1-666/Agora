@@ -92,6 +92,21 @@ REGISTRY: dict[str, Tool] = {
         },
         run=_text_stats,
     ),
+    # delegate 是多智能体的核心:把子任务委派给另一个 agent。执行需要 org/DB 上下文,
+    # 由上层 tool_runner(orchestration.make_tool_runner)处理。
+    "delegate": Tool(
+        name="delegate",
+        description="把一个子任务委派给另一个 agent 完成,返回它的结果。用于把复杂任务拆给合适的专家 agent。",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "agent": {"type": "string", "description": "目标 agent 的名称"},
+                "task": {"type": "string", "description": "交给它的具体子任务"},
+            },
+            "required": ["agent", "task"],
+        },
+        run=lambda args: "(委派需在会话上下文中执行)",
+    ),
     # remember 是"有状态"工具:把一条事实存为长期记忆。它的执行需要 org 上下文,
     # 由上层注入的 tool_runner 处理(见 main.py),这里的 run 仅作兜底说明。
     "remember": Tool(

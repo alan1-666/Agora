@@ -17,6 +17,16 @@ type Item =
   | { kind: "user" | "assistant"; content: string }
   | { kind: "tool"; name: string; input: string; output?: string };
 
+// 把 delegate 的入参(JSON 字符串)渲染成「→ 助手: 任务」
+function renderDelegate(input: string): string {
+  try {
+    const { agent, task } = JSON.parse(input);
+    return `→ ${agent}: ${task}`;
+  } catch {
+    return input;
+  }
+}
+
 export default function ChatPage() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [active, setActive] = useState<string | null>(null);
@@ -174,18 +184,32 @@ export default function ChatPage() {
           )}
           {items.map((it, i) =>
             it.kind === "tool" ? (
-              <div key={i} className="flex justify-start">
-                <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs text-blue-700">
-                  🔧 <b>{it.name}</b>({it.input}){" "}
-                  {it.output !== undefined ? (
-                    <>
-                      → <span className="font-mono">{it.output}</span>
-                    </>
-                  ) : (
-                    "…"
-                  )}
+              it.name === "delegate" ? (
+                // 委派:多智能体——协调者把子任务派给另一个 agent
+                <div key={i} className="flex justify-start">
+                  <div className="max-w-[85%] rounded-md border border-purple-200 bg-purple-50 px-3 py-1.5 text-xs text-purple-800">
+                    🤝 <b>委派</b> {renderDelegate(it.input)}
+                    {it.output !== undefined && (
+                      <div className="mt-1 border-l-2 border-purple-300 pl-2 text-purple-700">
+                        ↳ {it.output}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div key={i} className="flex justify-start">
+                  <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs text-blue-700">
+                    🔧 <b>{it.name}</b>({it.input}){" "}
+                    {it.output !== undefined ? (
+                      <>
+                        → <span className="font-mono">{it.output}</span>
+                      </>
+                    ) : (
+                      "…"
+                    )}
+                  </div>
+                </div>
+              )
             ) : (
               <div key={i} className={`flex ${it.kind === "user" ? "justify-end" : "justify-start"}`}>
                 <div
