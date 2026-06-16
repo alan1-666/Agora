@@ -16,7 +16,7 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -87,6 +87,23 @@ class OrgApiKey(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 
 
+class Agent(Base):
+    """智能体定义。org 作用域表。一个组织可建多个 agent,各有人设和启用的工具。"""
+
+    __tablename__ = "agents"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(64))
+    system_prompt: Mapped[str] = mapped_column(Text, default="")
+    model: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # 启用的工具名列表(对应 tools.py 注册表的 key)
+    tools: Mapped[list] = mapped_column(JSONB, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
 class Channel(Base):
     """频道(阶段 1 先当成一个对话会话用)。org 作用域表。"""
 
@@ -134,6 +151,7 @@ class Message(Base):
 ORG_SCOPED_TABLES = [
     "memberships",
     "org_api_keys",
+    "agents",
     "channels",
     "messages",
 ]

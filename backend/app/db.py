@@ -12,11 +12,22 @@ RLS(行级安全)隔离原理:
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from sqlalchemy import text
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import Session as SyncSession
 
 from .config import settings
 from .models import ORG_SCOPED_TABLES, Base
+
+
+# 关键:每个事务开始时自动把当前 org 写进 app.current_org(SET LOCAL,事务级)。
+# 这样即使一个会话里中途 commit(事务结束、设置被重置),下一个事务一 begin 就会重新设上,
+# RLS 永远有正确的当前组织。比"只在会话开头设一次"健壮(后者遇到中途 commit 就丢)。
+@event.listens_for(SyncSession, "after_begin")
+def _apply_org_rls(session, transaction, connection):
+    org = session.info.get("agora_org")
+    if org:
+        connection.exec_driver_sql("SELECT set_config('app.current_org', %s, true)", (org,))
 
 # 运行时引擎:连非超级用户 agora_app,RLS 生效
 engine = create_async_engine(settings.database_url, pool_pre_ping=True)
@@ -71,18 +82,13 @@ async def init_db() -> None:
 
 @asynccontextmanager
 async def session_for_org(org_id: str) -> AsyncIterator[AsyncSession]:
-    """开一个短事务会话,并设好 RLS 的当前组织。
+    """开一个会话并绑定当前组织;该会话所有事务都自动按此 org 受 RLS 约束。
 
-    用法:
-        async with session_for_org(org_id) as s:
-            ... # 这里的所有读写都自动被限定在该 org
-            await s.commit()
+    org 不在这里直接 set,而是记在 session.info,由 after_begin 事件在每个事务开始时应用
+    (见上方 _apply_org_rls),从而对"会话中途 commit"也健壮。
     """
     async with _session_factory() as session:
-        # SET LOCAL 仅在当前事务内有效;autobegin 已开启事务
-        await session.execute(
-            text("SELECT set_config('app.current_org', :org, true)"), {"org": org_id}
-        )
+        session.sync_session.info["agora_org"] = org_id
         yield session
 
 

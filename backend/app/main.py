@@ -15,12 +15,13 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
 
+from .agent import run_agent
 from .auth import AuthContext, get_auth
 from .config import settings
 from .crypto import decrypt, encrypt
 from .db import init_db, session_for_org
-from .llm import stream_chat
-from .models import Channel, Message, OrgApiKey
+from .models import Agent, Channel, Message, OrgApiKey
+from .tools import ALL_TOOL_NAMES
 
 
 @asynccontextmanager
@@ -125,11 +126,75 @@ async def list_messages(channel_id: str, auth: AuthContext = Depends(get_auth)):
         return [{"role": m.role, "content": m.content, "seq": m.seq} for m in rows]
 
 
-# ---------- 流式对话(落库) ----------
+# ---------- Agents ----------
+
+class CreateAgentRequest(BaseModel):
+    name: str
+    system_prompt: str = ""
+    model: str | None = None
+    tools: list[str] = []
+
+
+def _agent_dict(a: Agent) -> dict:
+    return {
+        "id": str(a.id),
+        "name": a.name,
+        "system_prompt": a.system_prompt,
+        "model": a.model,
+        "tools": a.tools or [],
+    }
+
+
+async def _ensure_default_agent(s, org_id: str) -> Agent:
+    """组织没有 agent 时,种一个默认"助手"(启用全部工具)。"""
+    a = Agent(
+        org_id=org_id,
+        name="助手",
+        system_prompt="你是 Agora 里的 AI 助手。需要算数、查时间、统计文本时,调用对应工具,不要心算。",
+        tools=ALL_TOOL_NAMES,
+    )
+    s.add(a)
+    await s.commit()
+    return a
+
+
+@app.get("/api/agents")
+async def list_agents(auth: AuthContext = Depends(get_auth)):
+    async with session_for_org(auth.org_id) as s:
+        rows = (await s.execute(select(Agent).order_by(Agent.created_at))).scalars().all()
+        if not rows:
+            rows = [await _ensure_default_agent(s, auth.org_id)]
+        return [_agent_dict(a) for a in rows]
+
+
+@app.post("/api/agents")
+async def create_agent(req: CreateAgentRequest, auth: AuthContext = Depends(get_auth)):
+    async with session_for_org(auth.org_id) as s:
+        a = Agent(
+            org_id=auth.org_id,
+            name=req.name,
+            system_prompt=req.system_prompt,
+            model=req.model,
+            tools=[t for t in req.tools if t in ALL_TOOL_NAMES],
+        )
+        s.add(a)
+        await s.commit()
+        return _agent_dict(a)
+
+
+@app.get("/api/tools")
+async def list_tools():
+    from .tools import REGISTRY
+
+    return [{"name": t.name, "description": t.description} for t in REGISTRY.values()]
+
+
+# ---------- 流式对话(经 agent,落库) ----------
 
 class ChatRequest(BaseModel):
     channel_id: str
     content: str
+    agent_id: str | None = None
 
 
 async def _next_seq(s, channel_id: str) -> int:
@@ -141,11 +206,15 @@ async def _next_seq(s, channel_id: str) -> int:
     return int(cur) + 1
 
 
+def _sse(payload: dict) -> bytes:
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n".encode()
+
+
 @app.post("/api/chat/stream")
 async def chat_stream(req: ChatRequest, auth: AuthContext = Depends(get_auth)):
     org_id = auth.org_id
 
-    # 1) 短事务:存用户消息 + 取该频道历史 + 取组织 key
+    # 1) 短事务:存用户消息 + 取频道历史 + 取选定 agent
     async with session_for_org(org_id) as s:
         ch = (
             await s.execute(select(Channel).where(Channel.id == req.channel_id))
@@ -153,15 +222,20 @@ async def chat_stream(req: ChatRequest, auth: AuthContext = Depends(get_auth)):
         if ch is None:
             raise HTTPException(404, "频道不存在或无权访问")
 
+        if req.agent_id:
+            agent = (
+                await s.execute(select(Agent).where(Agent.id == req.agent_id))
+            ).scalar_one_or_none()
+        else:
+            agent = (await s.execute(select(Agent).order_by(Agent.created_at))).scalars().first()
+        if agent is None:
+            agent = await _ensure_default_agent(s, org_id)
+
         seq = await _next_seq(s, req.channel_id)
         s.add(
             Message(
-                org_id=org_id,
-                channel_id=req.channel_id,
-                seq=seq,
-                role="user",
-                content=req.content,
-                sender_user_id=auth.user_id,
+                org_id=org_id, channel_id=req.channel_id, seq=seq, role="user",
+                content=req.content, sender_user_id=auth.user_id,
             )
         )
         history_rows = (
@@ -171,31 +245,39 @@ async def chat_stream(req: ChatRequest, auth: AuthContext = Depends(get_auth)):
         ).scalars().all()
         history = [{"role": m.role, "content": m.content} for m in history_rows]
         history.append({"role": "user", "content": req.content})
+        agent_system = agent.system_prompt
+        agent_tools = agent.tools or []
+        agent_model = agent.model
         await s.commit()
 
     api_key = await _org_api_key(org_id)
 
-    # 2) 流式(不持有数据库事务),边推边攒完整回复
+    # 2) 跑 agent loop(不持有数据库事务),转发事件
     async def gen() -> AsyncIterator[bytes]:
-        full = []
-        try:
-            async for delta in stream_chat(history, api_key=api_key):
-                full.append(delta)
-                yield f"data: {json.dumps({'delta': delta}, ensure_ascii=False)}\n\n".encode()
-        except Exception as e:
-            yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n".encode()
-        # 3) 短事务:存 assistant 回复(有内容才存)
-        answer = "".join(full)
+        answer = ""
+        async for ev in run_agent(
+            history, agent_system, agent_tools, api_key=api_key, model=agent_model
+        ):
+            if ev["type"] == "final":
+                # 最终文本已经在本轮通过 delta 流式推过了,这里只留作落库
+                answer = ev["text"]
+            elif ev["type"] == "delta":
+                yield _sse({"delta": ev["text"]})
+            elif ev["type"] == "tool_call":
+                yield _sse({"tool_call": {"name": ev["name"], "input": ev["input"]}})
+            elif ev["type"] == "tool_result":
+                yield _sse({"tool_result": {"name": ev["name"], "output": ev["output"]}})
+            elif ev["type"] == "error":
+                yield _sse({"error": ev["message"]})
+
+        # 3) 短事务:存 assistant 最终答复
         if answer:
             async with session_for_org(org_id) as s2:
                 seq2 = await _next_seq(s2, req.channel_id)
                 s2.add(
                     Message(
-                        org_id=org_id,
-                        channel_id=req.channel_id,
-                        seq=seq2,
-                        role="assistant",
-                        content=answer,
+                        org_id=org_id, channel_id=req.channel_id, seq=seq2,
+                        role="assistant", content=answer,
                     )
                 )
                 await s2.commit()

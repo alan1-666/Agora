@@ -14,12 +14,20 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 
 export type Channel = { id: string; name: string };
 export type ChatMessage = { role: "user" | "assistant"; content: string; seq?: number };
+export type Agent = {
+  id: string;
+  name: string;
+  system_prompt: string;
+  model: string | null;
+  tools: string[];
+};
 
 export const listChannels = () => req<Channel[]>("/api/channels");
 export const createChannel = (name: string) =>
   req<Channel>("/api/channels", { method: "POST", body: JSON.stringify({ name }) });
 export const listMessages = (channelId: string) =>
   req<ChatMessage[]>(`/api/channels/${channelId}/messages`);
+export const listAgents = () => req<Agent[]>("/api/agents");
 
 export const getKeyStatus = () =>
   req<{ configured: boolean; model: string | null }>("/api/org/key");
@@ -29,15 +37,24 @@ export const setOrgKey = (api_key: string, model?: string) =>
     body: JSON.stringify({ api_key, model }),
   });
 
-// 流式对话:返回一个异步迭代器,逐段吐出文本增量。
+// 流式对话事件:文本增量 / 工具调用 / 工具结果 / 错误。
+export type ChatEvent = {
+  delta?: string;
+  tool_call?: { name: string; input: Record<string, unknown> };
+  tool_result?: { name: string; output: string };
+  error?: string;
+};
+
+// 流式对话:返回一个异步迭代器,逐个吐出事件(经 agent,可能含工具调用)。
 export async function* streamChat(
   channelId: string,
   content: string,
-): AsyncGenerator<{ delta?: string; error?: string }> {
+  agentId?: string,
+): AsyncGenerator<ChatEvent> {
   const res = await fetch(`${API_URL}/api/chat/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ channel_id: channelId, content }),
+    body: JSON.stringify({ channel_id: channelId, content, agent_id: agentId }),
   });
   const reader = res.body!.getReader();
   const decoder = new TextDecoder();

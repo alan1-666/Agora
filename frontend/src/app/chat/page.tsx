@@ -3,18 +3,26 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import AuthHeader from "@/components/auth-header";
 import {
+  type Agent,
   type Channel,
-  type ChatMessage,
   createChannel,
+  listAgents,
   listChannels,
   listMessages,
   streamChat,
 } from "@/lib/api";
 
+// UI 消息项:用户/助手气泡,或一条工具调用记录(🔧)
+type Item =
+  | { kind: "user" | "assistant"; content: string }
+  | { kind: "tool"; name: string; input: string; output?: string };
+
 export default function ChatPage() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [active, setActive] = useState<string | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [agentId, setAgentId] = useState<string>("");
+  const [items, setItems] = useState<Item[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -22,7 +30,6 @@ export default function ChatPage() {
   const scrollDown = () =>
     requestAnimationFrame(() => scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight));
 
-  // 载入频道,没有就建一个默认频道
   const loadChannels = useCallback(async () => {
     let chs = await listChannels();
     if (chs.length === 0) {
@@ -35,47 +42,66 @@ export default function ChatPage() {
 
   useEffect(() => {
     loadChannels().catch(console.error);
+    listAgents()
+      .then((a) => {
+        setAgents(a);
+        setAgentId((cur) => cur || a[0]?.id || "");
+      })
+      .catch(console.error);
   }, [loadChannels]);
 
-  // 切换频道时载入历史
   useEffect(() => {
     if (!active) return;
-    listMessages(active).then(setMessages).catch(console.error);
+    listMessages(active)
+      .then((ms) => setItems(ms.map((m) => ({ kind: m.role, content: m.content }) as Item)))
+      .catch(console.error);
   }, [active]);
 
   async function send() {
     const text = input.trim();
     if (!text || streaming || !active) return;
     setInput("");
-    setMessages((m) => [...m, { role: "user", content: text }, { role: "assistant", content: "" }]);
+
+    const buf: Item[] = [...items, { kind: "user", content: text }];
+    setItems([...buf]);
     setStreaming(true);
     scrollDown();
+
+    let openAssistant = -1; // 当前正在追加的助手气泡下标;-1 表示需新建
     try {
-      for await (const ev of streamChat(active, text)) {
+      for await (const ev of streamChat(active, text, agentId || undefined)) {
         if (ev.delta) {
-          setMessages((m) => {
-            const copy = [...m];
-            copy[copy.length - 1] = {
-              role: "assistant",
-              content: copy[copy.length - 1].content + ev.delta,
-            };
-            return copy;
+          if (openAssistant === -1) {
+            buf.push({ kind: "assistant", content: "" });
+            openAssistant = buf.length - 1;
+          }
+          const cur = buf[openAssistant] as { kind: "assistant"; content: string };
+          buf[openAssistant] = { kind: "assistant", content: cur.content + ev.delta };
+        } else if (ev.tool_call) {
+          openAssistant = -1; // 工具调用前先收尾当前气泡
+          buf.push({
+            kind: "tool",
+            name: ev.tool_call.name,
+            input: JSON.stringify(ev.tool_call.input),
           });
-          scrollDown();
+        } else if (ev.tool_result) {
+          for (let i = buf.length - 1; i >= 0; i--) {
+            const it = buf[i];
+            if (it.kind === "tool" && it.output === undefined) {
+              buf[i] = { ...it, output: ev.tool_result.output };
+              break;
+            }
+          }
         } else if (ev.error) {
-          setMessages((m) => {
-            const copy = [...m];
-            copy[copy.length - 1] = { role: "assistant", content: `⚠️ ${ev.error}` };
-            return copy;
-          });
+          buf.push({ kind: "assistant", content: `⚠️ ${ev.error}` });
+          openAssistant = -1;
         }
+        setItems([...buf]);
+        scrollDown();
       }
     } catch (e) {
-      setMessages((m) => {
-        const copy = [...m];
-        copy[copy.length - 1] = { role: "assistant", content: `⚠️ 请求失败: ${String(e)}` };
-        return copy;
-      });
+      buf.push({ kind: "assistant", content: `⚠️ 请求失败: ${String(e)}` });
+      setItems([...buf]);
     } finally {
       setStreaming(false);
     }
@@ -91,10 +117,10 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-screen">
-      {/* 侧栏:频道列表 */}
+      {/* 侧栏 */}
       <aside className="flex w-56 flex-col bg-neutral-900 text-neutral-200">
         <div className="px-4 py-4 text-lg font-bold">
-          Agora <span className="text-xs font-normal text-yellow-300">阶段1</span>
+          Agora <span className="text-xs font-normal text-yellow-300">阶段2</span>
         </div>
         <div className="flex items-center justify-between px-4 py-1 text-xs text-neutral-400">
           <span>频道</span>
@@ -120,29 +146,60 @@ export default function ChatPage() {
       {/* 主区 */}
       <main className="flex flex-1 flex-col bg-neutral-50">
         <header className="flex items-center justify-between border-b bg-neutral-900 px-5 py-3 text-white">
-          <span className="font-semibold">
-            # {channels.find((c) => c.id === active)?.name ?? "..."}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="font-semibold">
+              # {channels.find((c) => c.id === active)?.name ?? "..."}
+            </span>
+            {/* agent 选择器 */}
+            <select
+              value={agentId}
+              onChange={(e) => setAgentId(e.target.value)}
+              className="rounded bg-neutral-700 px-2 py-1 text-xs text-neutral-100 outline-none"
+            >
+              {agents.map((a) => (
+                <option key={a.id} value={a.id}>
+                  🤖 {a.name}（{a.tools.length} 工具）
+                </option>
+              ))}
+            </select>
+          </div>
           <AuthHeader />
         </header>
 
         <div ref={scrollRef} className="flex flex-1 flex-col gap-3 overflow-y-auto p-5">
-          {messages.length === 0 && (
-            <div className="mt-10 text-center text-neutral-400">和 AI 说点什么吧 —— 回复会逐字蹦出来，历史会保存。</div>
-          )}
-          {messages.map((m, i) => (
-            <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div
-                className={`max-w-[78%] whitespace-pre-wrap break-words rounded-xl px-3.5 py-2.5 text-sm leading-relaxed ${
-                  m.role === "user"
-                    ? "bg-yellow-300 text-neutral-900"
-                    : "border border-neutral-200 bg-white text-neutral-800"
-                }`}
-              >
-                {m.content || (streaming && i === messages.length - 1 ? "…" : "")}
-              </div>
+          {items.length === 0 && (
+            <div className="mt-10 text-center text-neutral-400">
+              试试「现在几点」或「帮我算 (13×17)+5」—— agent 会自己调用工具。
             </div>
-          ))}
+          )}
+          {items.map((it, i) =>
+            it.kind === "tool" ? (
+              <div key={i} className="flex justify-start">
+                <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs text-blue-700">
+                  🔧 <b>{it.name}</b>({it.input}){" "}
+                  {it.output !== undefined ? (
+                    <>
+                      → <span className="font-mono">{it.output}</span>
+                    </>
+                  ) : (
+                    "…"
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div key={i} className={`flex ${it.kind === "user" ? "justify-end" : "justify-start"}`}>
+                <div
+                  className={`max-w-[78%] whitespace-pre-wrap break-words rounded-xl px-3.5 py-2.5 text-sm leading-relaxed ${
+                    it.kind === "user"
+                      ? "bg-yellow-300 text-neutral-900"
+                      : "border border-neutral-200 bg-white text-neutral-800"
+                  }`}
+                >
+                  {it.content || (streaming && i === items.length - 1 ? "…" : "")}
+                </div>
+              </div>
+            ),
+          )}
         </div>
 
         <div className="flex gap-2.5 border-t bg-white p-4">
