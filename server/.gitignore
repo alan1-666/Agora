@@ -1,0 +1,4 @@
+/agora
+/agora-srv
+*.exe
+.env
