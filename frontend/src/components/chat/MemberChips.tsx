@@ -20,7 +20,7 @@ export default function MemberChips({
           <button
             key={a.id}
             onClick={() => onSelect(a.id)}
-            title={`${a.name} · ${a.tools.length} 工具`}
+            title={a.name}
             className={`flex items-center gap-1.5 rounded-full border py-1 pl-1 pr-2.5 text-xs transition-colors ${
               active
                 ? "border-brand/40 bg-brand-soft font-medium text-brand"

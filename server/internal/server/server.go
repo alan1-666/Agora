@@ -32,7 +32,7 @@ func (s *Server) Routes(r *gin.Engine) {
 		c.JSON(200, gin.H{"status": "ok", "model": s.cfg.Model})
 	})
 	api := r.Group("/api")
-	api.GET("/tools", s.listTools)
+	api.GET("/runtime", s.runtimeStatus)
 	api.GET("/agents", s.listAgents)
 	api.POST("/agents", s.createAgent)
 	api.PUT("/agents/:id", s.updateAgent)
@@ -54,13 +54,9 @@ func (s *Server) Routes(r *gin.Engine) {
 
 // ---------- tools / agents ----------
 
-func (s *Server) listTools(c *gin.Context) {
-	out := []gin.H{}
-	for _, n := range tools.AllNames {
-		t := tools.Registry[n]
-		out = append(out, gin.H{"name": t.Name, "description": t.Description})
-	}
-	c.JSON(200, out)
+// runtimeStatus 报告本机 claude CLI 是否可用(Raft 模式靠它执行)。
+func (s *Server) runtimeStatus(c *gin.Context) {
+	c.JSON(200, gin.H{"available": runtime.Available(), "version": runtime.Version()})
 }
 
 var workerTools = func() []string {

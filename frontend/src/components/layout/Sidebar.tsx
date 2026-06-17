@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { getKeyStatus } from "@/lib/api";
+import { getRuntimeStatus } from "@/lib/api";
 import { avatarColor, initial } from "@/lib/format";
-import type { KeyStatus } from "@/lib/types";
 import { useWorkspace } from "@/components/workspace-context";
 
 const NAV = [
@@ -17,11 +16,11 @@ const NAV = [
 export default function Sidebar() {
   const pathname = usePathname();
   const { channels, active, activeId, setActiveId, create, agents, openDm } = useWorkspace();
-  const [key, setKey] = useState<KeyStatus | null>(null);
+  const [rt, setRt] = useState<{ available: boolean; version: string } | null>(null);
   const activeDmName = active?.kind === "dm" ? active.name : null;
 
   useEffect(() => {
-    getKeyStatus().then(setKey).catch(() => {});
+    getRuntimeStatus().then(setRt).catch(() => {});
   }, [pathname]);
 
   const onChat = pathname === "/chat";
@@ -99,17 +98,13 @@ export default function Sidebar() {
         ))}
       </div>
 
-      {/* 模型接入状态 */}
+      {/* 运行时:本机 Claude Code */}
       <Link
         href="/settings"
         className="flex items-center gap-2 border-t border-hairline px-4 py-3 text-xs text-neutral-500 hover:bg-black/5"
       >
-        <span className={`h-2 w-2 rounded-full ${key?.configured ? "bg-emerald-500" : "bg-amber-500"}`} />
-        {key == null
-          ? "…"
-          : key.configured
-            ? `已接入 · ${key.kind === "oauth" ? "Claude 登录" : "API Key"}`
-            : "未接入模型"}
+        <span className={`h-2 w-2 rounded-full ${rt?.available ? "bg-emerald-500" : "bg-amber-500"}`} />
+        {rt == null ? "…" : rt.available ? `Claude Code · ${rt.version || "已就绪"}` : "未检测到 claude CLI"}
       </Link>
     </aside>
   );

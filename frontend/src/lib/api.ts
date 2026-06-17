@@ -1,5 +1,5 @@
 import { API_URL } from "./config";
-import type { Agent, Channel, ChannelEvent, ChatMessage, Doc, KeyStatus } from "./types";
+import type { Agent, Channel, ChannelEvent, ChatMessage, Doc } from "./types";
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
@@ -21,9 +21,11 @@ export const listDms = () => req<Channel[]>("/api/dms");
 export const openDm = (agentId: string) =>
   req<Channel>("/api/dms", { method: "POST", body: JSON.stringify({ agent_id: agentId }) });
 
+// 运行时:Raft 模式靠本机 claude CLI 执行
+export const getRuntimeStatus = () => req<{ available: boolean; version: string }>("/api/runtime");
+
 // agents / 文档
 export const listAgents = () => req<Agent[]>("/api/agents");
-export const listTools = () => req<{ name: string; description: string }[]>("/api/tools");
 export type AgentInput = { name: string; system_prompt: string; model?: string | null; tools: string[] };
 export const createAgent = (a: AgentInput) =>
   req<Agent>("/api/agents", { method: "POST", body: JSON.stringify(a) });
@@ -37,16 +39,6 @@ export const uploadDocument = (name: string, text: string) =>
     method: "POST",
     body: JSON.stringify({ name, text }),
   });
-
-// 模型凭证
-export const getKeyStatus = () => req<KeyStatus>("/api/org/key");
-export const setOrgKey = (api_key: string, model?: string) =>
-  req<{ ok: boolean }>("/api/org/key", { method: "PUT", body: JSON.stringify({ api_key, model }) });
-
-// Claude 订阅 OAuth
-export const claudeStart = () => req<{ url: string }>("/api/auth/claude/start", { method: "POST" });
-export const claudeFinish = (code: string) =>
-  req<{ ok: boolean }>("/api/auth/claude/finish", { method: "POST", body: JSON.stringify({ code }) });
 
 // 派活:把任务交给后端(立即返回),agent 在后台干,结果经频道流推回。
 export const dispatch = (channelId: string, content: string, agentId?: string, threadId?: string) =>

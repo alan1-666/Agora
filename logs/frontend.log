@@ -6,7 +6,16 @@
 - Local:         http://localhost:3000
 - Network:       http://192.168.5.8:3000
 - Environments: .env.local
-✓ Ready in 382ms
+✓ Ready in 266ms
 
- GET /settings 200 in 230ms (next.js: 110ms, application-code: 120ms)
- GET /chat 200 in 62ms (next.js: 33ms, application-code: 29ms)
+[browser] Error: 404 page not found
+    at req (src/lib/api.ts:9:22)
+   7 |     headers: { "Content-Type": "application/json", ...init?.headers },
+   8 |   });
+>  9 |   if (!res.ok) throw new Error(await res.text());
+     |                      ^
+  10 |   return res.json() as Promise<T>;
+  11 | }
+  12 |
+ GET /settings 200 in 231ms (next.js: 118ms, application-code: 113ms)
+ GET /settings 200 in 22ms (next.js: 2ms, application-code: 20ms)
