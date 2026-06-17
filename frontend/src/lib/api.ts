@@ -1,8 +1,6 @@
 import { API_URL } from "./config";
+import type { Agent, Channel, ChatEvent, ChatMessage, Doc, KeyStatus } from "./types";
 
-// 后端 API 客户端。
-// 注:dev 模式下后端用内置 org,无需带 token。启用 Clerk 后(且后端接好 JWT 校验),
-// 这里再补 Authorization: Bearer <clerk token>(留待后端 Clerk 校验落地时一起接)。
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
@@ -12,24 +10,15 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export type Channel = { id: string; name: string };
-export type ChatMessage = { role: "user" | "assistant"; content: string; seq?: number };
-export type Agent = {
-  id: string;
-  name: string;
-  system_prompt: string;
-  model: string | null;
-  tools: string[];
-};
-
+// 频道
 export const listChannels = () => req<Channel[]>("/api/channels");
 export const createChannel = (name: string) =>
   req<Channel>("/api/channels", { method: "POST", body: JSON.stringify({ name }) });
 export const listMessages = (channelId: string) =>
   req<ChatMessage[]>(`/api/channels/${channelId}/messages`);
-export const listAgents = () => req<Agent[]>("/api/agents");
 
-export type Doc = { id: string; name: string };
+// agents / 文档
+export const listAgents = () => req<Agent[]>("/api/agents");
 export const listDocuments = () => req<Doc[]>("/api/documents");
 export const uploadDocument = (name: string, text: string) =>
   req<{ id: string; name: string; chunks: number }>("/api/documents", {
@@ -37,31 +26,17 @@ export const uploadDocument = (name: string, text: string) =>
     body: JSON.stringify({ name, text }),
   });
 
-export const getKeyStatus = () =>
-  req<{ configured: boolean; kind?: string; model: string | null }>("/api/org/key");
+// 模型凭证
+export const getKeyStatus = () => req<KeyStatus>("/api/org/key");
 export const setOrgKey = (api_key: string, model?: string) =>
-  req<{ ok: boolean }>("/api/org/key", {
-    method: "PUT",
-    body: JSON.stringify({ api_key, model }),
-  });
+  req<{ ok: boolean }>("/api/org/key", { method: "PUT", body: JSON.stringify({ api_key, model }) });
 
-// Claude 订阅 OAuth 登录(免 API key)
+// Claude 订阅 OAuth
 export const claudeStart = () => req<{ url: string }>("/api/auth/claude/start", { method: "POST" });
 export const claudeFinish = (code: string) =>
-  req<{ ok: boolean }>("/api/auth/claude/finish", {
-    method: "POST",
-    body: JSON.stringify({ code }),
-  });
+  req<{ ok: boolean }>("/api/auth/claude/finish", { method: "POST", body: JSON.stringify({ code }) });
 
-// 流式对话事件:文本增量 / 工具调用 / 工具结果 / 错误。
-export type ChatEvent = {
-  delta?: string;
-  tool_call?: { name: string; input: Record<string, unknown> };
-  tool_result?: { name: string; output: string };
-  error?: string;
-};
-
-// 流式对话:返回一个异步迭代器,逐个吐出事件(经 agent,可能含工具调用)。
+// 流式对话:逐个吐出 SSE 事件(经 agent,可能含工具调用)。
 export async function* streamChat(
   channelId: string,
   content: string,
@@ -86,9 +61,7 @@ export async function* streamChat(
       if (!line) continue;
       const payload = JSON.parse(line.slice(6));
       if (payload.done) return;
-      yield payload;
+      yield payload as ChatEvent;
     }
   }
 }
-
-export { API_URL };

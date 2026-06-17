@@ -10,3 +10,149 @@
 ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
 
  GET /settings 200 in 278ms (next.js: 87ms, proxy.ts: 56ms, application-code: 135ms)
+ GET /chat 200 in 62ms (next.js: 29ms, proxy.ts: 15ms, application-code: 18ms)
+ GET /documents 200 in 58ms (next.js: 37ms, proxy.ts: 5ms, application-code: 16ms)
+✓ Compiled in 634ms
+✓ Compiled in 248ms
+ GET /chat 200 in 141ms (next.js: 58ms, proxy.ts: 32ms, application-code: 51ms)
+ GET /chat 200 in 34ms (next.js: 4ms, proxy.ts: 1646µs, application-code: 28ms)
+ GET /chat 200 in 33ms (next.js: 1407µs, proxy.ts: 1762µs, application-code: 30ms)
+ GET /chat 200 in 33ms (next.js: 1203µs, proxy.ts: 1138µs, application-code: 31ms)
+ GET /chat 200 in 24ms (next.js: 2ms, proxy.ts: 1352µs, application-code: 20ms)
+ GET /chat 200 in 13ms (next.js: 1870µs, proxy.ts: 2ms, application-code: 9ms)
+✓ Compiled in 25ms
+✓ Compiled in 42ms
+✓ Compiled in 24ms
+✓ Compiled in 19ms
+✓ Compiled in 18ms
+✓ Compiled in 29ms
+✓ Compiled in 26ms
+⨯ ./src/app/chat
+You cannot have two parallel pages that resolve to the same path. Please check /(app)/chat and /chat.
+
+✓ Compiled in 575ms
+ GET /chat 500 in 759ms (next.js: 688ms, proxy.ts: 3ms, application-code: 68ms)
+⨯ ./src/app/chat
+You cannot have two parallel pages that resolve to the same path. Please check /(app)/chat and /chat.
+
+⨯ ./src/app/chat
+You cannot have two parallel pages that resolve to the same path. Please check /(app)/chat and /chat.
+
+ GET /chat 500 in 28ms (next.js: 5ms, proxy.ts: 16ms, application-code: 7ms)
+ GET /chat 500 in 20ms (next.js: 11ms, proxy.ts: 1262µs, application-code: 7ms)
+⨯ ./src/app/chat
+You cannot have two parallel pages that resolve to the same path. Please check /(app)/chat and /chat.
+
+ GET /chat 500 in 53ms (next.js: 8ms, proxy.ts: 4ms, application-code: 42ms)
+[browser] Uncaught Error: ./src/app/chat
+You cannot have two parallel pages that resolve to the same path. Please check /(app)/chat and /chat.
+
+⨯ ./src/app/chat
+You cannot have two parallel pages that resolve to the same path. Please check /(app)/chat and /chat.
+
+
+./src/app/settings
+You cannot have two parallel pages that resolve to the same path. Please check /(app)/settings and /settings.
+
+ GET /chat 500 in 76ms (next.js: 42ms, proxy.ts: 22ms, application-code: 12ms)
+[browser] Uncaught Error: ./src/app/chat
+You cannot have two parallel pages that resolve to the same path. Please check /(app)/chat and /chat.
+
+⨯ ./src/app/chat
+You cannot have two parallel pages that resolve to the same path. Please check /(app)/chat and /chat.
+
+
+./src/app/settings
+You cannot have two parallel pages that resolve to the same path. Please check /(app)/settings and /settings.
+
+ GET /chat 500 in 33ms (next.js: 14ms, proxy.ts: 3ms, application-code: 16ms)
+⨯ ./src/app/chat
+You cannot have two parallel pages that resolve to the same path. Please check /(app)/chat and /chat.
+
+
+./src/app/settings
+You cannot have two parallel pages that resolve to the same path. Please check /(app)/settings and /settings.
+
+ GET /chat 500 in 14ms (next.js: 1721µs, proxy.ts: 8ms, application-code: 4ms)
+[browser] Uncaught Error: ./src/app/chat
+You cannot have two parallel pages that resolve to the same path. Please check /(app)/chat and /chat.
+
+⨯ ./src/app/chat
+You cannot have two parallel pages that resolve to the same path. Please check /(app)/chat and /chat.
+
+
+./src/app/documents
+You cannot have two parallel pages that resolve to the same path. Please check /(app)/documents and /documents.
+
+
+./src/app/settings
+You cannot have two parallel pages that resolve to the same path. Please check /(app)/settings and /settings.
+
+ GET /chat 500 in 61ms (next.js: 34ms, proxy.ts: 9ms, application-code: 18ms)
+[browser] Uncaught Error: ./src/app/chat
+You cannot have two parallel pages that resolve to the same path. Please check /(app)/chat and /chat.
+
+⨯ ./src/app/chat
+You cannot have two parallel pages that resolve to the same path. Please check /(app)/chat and /chat.
+
+
+./src/app/documents
+You cannot have two parallel pages that resolve to the same path. Please check /(app)/documents and /documents.
+
+
+./src/app/settings
+You cannot have two parallel pages that resolve to the same path. Please check /(app)/settings and /settings.
+
+ GET /chat 500 in 16ms (next.js: 5ms, proxy.ts: 3ms, application-code: 9ms)
+[browser] Uncaught Error: ./src/app/chat
+You cannot have two parallel pages that resolve to the same path. Please check /(app)/chat and /chat.
+
+✓ Compiled in 289ms
+ GET /chat 200 in 347ms (next.js: 208ms, application-code: 140ms)
+✓ Compiled in 134ms
+ GET /chat 200 in 201ms (next.js: 107ms, application-code: 94ms)
+ GET /chat 200 in 57ms (next.js: 22ms, application-code: 35ms)
+ GET /chat 200 in 26ms (next.js: 791µs, application-code: 25ms)
+ GET /chat 200 in 30ms (next.js: 703µs, application-code: 29ms)
+ GET /chat 200 in 32ms (next.js: 724µs, application-code: 31ms)
+ GET /chat 200 in 32ms (next.js: 1229µs, application-code: 31ms)
+ GET /chat 200 in 32ms (next.js: 1247µs, application-code: 31ms)
+ GET /chat 200 in 40ms (next.js: 880µs, application-code: 39ms)
+ GET /chat 200 in 32ms (next.js: 1381µs, application-code: 30ms)
+ GET /chat 200 in 29ms (next.js: 1444µs, application-code: 28ms)
+ GET /chat 200 in 30ms (next.js: 826µs, application-code: 29ms)
+ GET /chat 200 in 29ms (next.js: 1425µs, application-code: 28ms)
+ GET /chat 200 in 28ms (next.js: 1184µs, application-code: 27ms)
+ GET /chat 200 in 27ms (next.js: 1144µs, application-code: 26ms)
+ GET /chat 200 in 59ms (next.js: 1170µs, application-code: 58ms)
+ GET /chat 200 in 52ms (next.js: 883µs, application-code: 51ms)
+ GET /chat 200 in 51ms (next.js: 1267µs, application-code: 50ms)
+ GET /chat 200 in 54ms (next.js: 2ms, application-code: 52ms)
+ GET /chat 200 in 34ms (next.js: 1197µs, application-code: 33ms)
+ GET /chat 200 in 34ms (next.js: 1117µs, application-code: 33ms)
+ GET /chat 200 in 34ms (next.js: 809µs, application-code: 34ms)
+ GET /chat 200 in 43ms (next.js: 950µs, application-code: 42ms)
+ GET /chat 200 in 50ms (next.js: 786µs, application-code: 49ms)
+ GET /chat 200 in 53ms (next.js: 909µs, application-code: 52ms)
+ GET /chat 200 in 45ms (next.js: 858µs, application-code: 44ms)
+ GET /chat 200 in 31ms (next.js: 1281µs, application-code: 30ms)
+ GET /chat 200 in 29ms (next.js: 989µs, application-code: 28ms)
+ GET /chat 200 in 26ms (next.js: 1329µs, application-code: 25ms)
+ GET /chat 200 in 26ms (next.js: 1202µs, application-code: 25ms)
+ GET /chat 200 in 35ms (next.js: 1089µs, application-code: 34ms)
+ GET /chat 200 in 37ms (next.js: 1133µs, application-code: 35ms)
+ GET /chat 200 in 40ms (next.js: 2ms, application-code: 38ms)
+ GET /chat 200 in 39ms (next.js: 816µs, application-code: 39ms)
+ GET /chat 200 in 39ms (next.js: 1032µs, application-code: 38ms)
+ GET /chat 200 in 38ms (next.js: 948µs, application-code: 38ms)
+ GET /chat 200 in 36ms (next.js: 827µs, application-code: 35ms)
+ GET /chat 200 in 35ms (next.js: 861µs, application-code: 34ms)
+ GET /chat 200 in 36ms (next.js: 755µs, application-code: 35ms)
+ GET /chat 200 in 36ms (next.js: 944µs, application-code: 35ms)
+ GET /chat 200 in 28ms (next.js: 774µs, application-code: 28ms)
+ GET /chat 200 in 32ms (next.js: 860µs, application-code: 31ms)
+ GET /chat 200 in 31ms (next.js: 837µs, application-code: 30ms)
+ GET /chat 200 in 31ms (next.js: 1423µs, application-code: 30ms)
+ GET /chat 200 in 21ms (next.js: 1200µs, application-code: 20ms)
+ GET /chat 200 in 13ms (next.js: 1286µs, application-code: 12ms)
+[?25h
