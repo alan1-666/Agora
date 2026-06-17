@@ -15,6 +15,16 @@ export function formatDelegate(input: string): string {
   }
 }
 
+/** 从消息文本里解析 @某agent,返回被 @ 的 agent(没有则 null)。 */
+export function resolveMention<T extends { name: string }>(text: string, agents: T[]): T | null {
+  // 名字长的优先(避免 "@助手" 命中 "@助手2" 的前缀歧义反向情况)
+  const sorted = [...agents].sort((a, b) => b.name.length - a.name.length);
+  for (const a of sorted) {
+    if (text.includes("@" + a.name)) return a;
+  }
+  return null;
+}
+
 /** 根据名字稳定生成一个柔和的头像底色。 */
 export function avatarColor(name: string): string {
   const palette = ["#f97316", "#0ea5e9", "#8b5cf6", "#10b981", "#ef4444", "#eab308"];

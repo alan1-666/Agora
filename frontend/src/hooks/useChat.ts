@@ -18,7 +18,7 @@ export function useChat(channelId: string | null, agentId: string) {
   }, [channelId]);
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, agentOverride?: string) => {
       const content = text.trim();
       if (!content || streaming || !channelId) return;
 
@@ -26,9 +26,10 @@ export function useChat(channelId: string | null, agentId: string) {
       setItems([...buf]);
       setStreaming(true);
 
+      const targetAgent = agentOverride || agentId;
       let openAssistant = -1; // 当前正在追加的助手消息下标;-1 表示需新建
       try {
-        for await (const ev of streamChat(channelId, content, agentId || undefined)) {
+        for await (const ev of streamChat(channelId, content, targetAgent || undefined)) {
           if (ev.delta) {
             if (openAssistant === -1) {
               buf.push({ kind: "message", role: "assistant", content: "" });
