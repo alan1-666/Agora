@@ -2,6 +2,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -10,6 +11,8 @@ import (
 
 	"agora/internal/agent"
 	"agora/internal/config"
+	"agora/internal/hub"
+	"agora/internal/llm"
 	"agora/internal/orchestration"
 	"agora/internal/rag"
 	"agora/internal/store"
@@ -19,10 +22,11 @@ import (
 type Server struct {
 	cfg config.Config
 	st  *store.Store
+	hub *hub.Hub
 }
 
-func New(cfg config.Config, st *store.Store) *Server {
-	return &Server{cfg: cfg, st: st}
+func New(cfg config.Config, st *store.Store, h *hub.Hub) *Server {
+	return &Server{cfg: cfg, st: st, hub: h}
 }
 
 func (s *Server) Routes(r *gin.Engine) {
@@ -40,12 +44,13 @@ func (s *Server) Routes(r *gin.Engine) {
 	api.GET("/dms", s.listDMs)
 	api.POST("/dms", s.openDM)
 	api.GET("/channels/:id/messages", s.listMessages)
+	api.GET("/channels/:id/stream", s.channelStream)
 	api.GET("/threads/:id", s.listThread)
 	api.GET("/documents", s.listDocuments)
 	api.POST("/documents", s.uploadDocument)
 	api.GET("/org/key", s.keyStatus)
 	api.PUT("/org/key", s.setKey)
-	api.POST("/chat/stream", s.chatStream)
+	api.POST("/chat/dispatch", s.dispatch)
 	s.registerOAuth(api)
 }
 
@@ -310,32 +315,59 @@ func rosterText(agents []store.Agent, exclude string) string {
 	return b.String()
 }
 
-func (s *Server) chatStream(c *gin.Context) {
+// channelStream 是频道的实时事件流(SSE):订阅 hub,把新消息/agent 活动推给前端。
+func (s *Server) channelStream(c *gin.Context) {
+	channelID := c.Param("id")
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.Header().Set("Cache-Control", "no-cache")
+	c.Writer.Header().Set("Connection", "keep-alive")
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		c.JSON(500, gin.H{"error": "stream unsupported"})
+		return
+	}
+
+	ch := s.hub.Subscribe(channelID)
+	defer s.hub.Unsubscribe(channelID, ch)
+	c.Writer.Write([]byte(": connected\n\n"))
+	flusher.Flush()
+
+	ctx := c.Request.Context()
+	for {
+		select {
+		case ev := <-ch:
+			b, _ := json.Marshal(ev)
+			c.Writer.Write([]byte("data: " + string(b) + "\n\n"))
+			flusher.Flush()
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// dispatch 派活:存下用户消息并立即返回,agent 在后台 goroutine 里干活,
+// 进度(delta/工具)与最终结果通过 hub 推给该频道的订阅者。客户端断开也不影响后台完成。
+func (s *Server) dispatch(c *gin.Context) {
 	var req struct {
 		ChannelID string `json:"channel_id"`
 		Content   string `json:"content"`
 		AgentID   string `json:"agent_id"`
-		ThreadID  string `json:"thread_id"` // 非空=在某线程内回复
+		ThreadID  string `json:"thread_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": "参数错误"})
 		return
 	}
-	ok, _ := s.st.ChannelExists(c, req.ChannelID)
-	if !ok {
+	if ok, _ := s.st.ChannelExists(c, req.ChannelID); !ok {
 		c.JSON(404, gin.H{"error": "频道不存在"})
 		return
 	}
 
-	agents, err := s.st.ListAgents(c)
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
+	agents, _ := s.st.ListAgents(c)
 	if len(agents) == 0 {
 		agents, _ = s.seedDefaults(c)
 	}
-	var ag store.Agent
+	ag := agents[0]
 	if req.AgentID != "" {
 		for _, a := range agents {
 			if a.ID == req.AgentID {
@@ -343,43 +375,20 @@ func (s *Server) chatStream(c *gin.Context) {
 			}
 		}
 	}
-	if ag.ID == "" {
-		ag = agents[0]
-	}
 
-	// 线程内回复:消息挂到根消息下,上下文用线程而非整个频道
 	var parent *string
 	if req.ThreadID != "" {
 		parent = &req.ThreadID
 	}
-	_ = s.st.AddMessage(c, req.ChannelID, "user", req.Content, parent)
-	var history []store.Message
-	if parent != nil {
-		history, _ = s.st.ListThread(c, req.ThreadID)
-	} else {
-		history, _ = s.st.ListMessages(c, req.ChannelID)
+	// 存用户消息并立即推给订阅者
+	userMsg, err := s.st.AddMessage(c, req.ChannelID, "user", req.Content, parent)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
 	}
-	msgs := make([]map[string]any, 0, len(history))
-	for _, m := range history {
-		msgs = append(msgs, map[string]any{"role": m.Role, "content": m.Content})
-	}
+	s.hub.Publish(req.ChannelID, hub.Event{"type": "message", "message": userMsg})
 
-	// system: 人设 + 花名册(协调者) + 检索上下文(RAG)
-	system := ag.SystemPrompt
-	hasDelegate := false
-	for _, t := range ag.Tools {
-		if t == "delegate" {
-			hasDelegate = true
-		}
-	}
-	if hasDelegate {
-		system += rosterText(agents, ag.Name)
-	}
-	if items, err := rag.Retrieve(c, s.st, req.Content, 3, 4); err == nil {
-		system += rag.BuildContext(items)
-	}
-
-	// 鉴权:OAuth(自动刷新)或 API key,否则兜底全局 key
+	// 解析鉴权/模型(在请求上下文内,goroutine 用 bg ctx)
 	llmAuth := s.resolveAuth(c)
 	model := s.cfg.Model
 	if st, _ := s.st.KeyStatus(c); st.Model != "" {
@@ -389,40 +398,67 @@ func (s *Server) chatStream(c *gin.Context) {
 		model = *ag.Model
 	}
 
-	// SSE
-	c.Writer.Header().Set("Content-Type", "text/event-stream")
-	c.Writer.Header().Set("Cache-Control", "no-cache")
-	flusher, _ := c.Writer.(http.Flusher)
-	send := func(payload map[string]any) {
-		b, _ := json.Marshal(payload)
-		c.Writer.Write([]byte("data: " + string(b) + "\n\n"))
-		if flusher != nil {
-			flusher.Flush()
+	c.JSON(202, gin.H{"ok": true})
+
+	// 后台干活
+	go s.runTask(req.ChannelID, req.ThreadID, parent, req.Content, ag, agents, llmAuth, model)
+}
+
+func (s *Server) runTask(
+	channelID, threadID string, parent *string, content string,
+	ag store.Agent, agents []store.Agent, llmAuth llm.Auth, model string,
+) {
+	ctx := context.Background()
+	pub := func(ev hub.Event) { s.hub.Publish(channelID, ev) }
+	pub(hub.Event{"type": "activity", "state": "working", "agent": ag.Name})
+
+	// 历史(线程或频道)
+	var history []store.Message
+	if parent != nil {
+		history, _ = s.st.ListThread(ctx, threadID)
+	} else {
+		history, _ = s.st.ListMessages(ctx, channelID)
+	}
+	msgs := make([]map[string]any, 0, len(history))
+	for _, m := range history {
+		msgs = append(msgs, map[string]any{"role": m.Role, "content": m.Content})
+	}
+
+	system := ag.SystemPrompt
+	for _, t := range ag.Tools {
+		if t == "delegate" {
+			system += rosterText(agents, ag.Name)
+			break
 		}
+	}
+	if items, err := rag.Retrieve(ctx, s.st, content, 3, 4); err == nil {
+		system += rag.BuildContext(items)
 	}
 
 	runner := orchestration.MakeToolRunner(s.st, llmAuth, model, s.cfg.MaxTokens, 0)
 	answer := ""
-	agent.Run(c, agent.Params{
+	agent.Run(ctx, agent.Params{
 		Messages: msgs, System: system, ToolNames: ag.Tools,
 		Auth: llmAuth, Model: model, MaxTokens: s.cfg.MaxTokens,
 	}, runner, func(e agent.Event) {
 		switch e.Type {
 		case "delta":
-			send(map[string]any{"delta": e.Text})
+			pub(hub.Event{"type": "activity", "kind": "delta", "text": e.Text})
 		case "tool_call":
-			send(map[string]any{"tool_call": map[string]any{"name": e.Name, "input": e.Input}})
+			pub(hub.Event{"type": "activity", "kind": "tool_call", "name": e.Name, "input": e.Input})
 		case "tool_result":
-			send(map[string]any{"tool_result": map[string]any{"name": e.Name, "output": e.Output}})
+			pub(hub.Event{"type": "activity", "kind": "tool_result", "name": e.Name, "output": e.Output})
 		case "final":
 			answer = e.Text
 		case "error":
-			send(map[string]any{"error": e.Text})
+			pub(hub.Event{"type": "activity", "kind": "error", "text": e.Text})
 		}
 	})
 
 	if answer != "" {
-		_ = s.st.AddMessage(c, req.ChannelID, "assistant", answer, parent)
+		if m, err := s.st.AddMessage(ctx, channelID, "assistant", answer, parent); err == nil {
+			pub(hub.Event{"type": "message", "message": m})
+		}
 	}
-	send(map[string]any{"done": true})
+	pub(hub.Event{"type": "activity", "state": "done"})
 }

@@ -55,6 +55,17 @@ export default function MessageList({
           </div>
         );
       })}
+
+      {streaming && (
+        <div className="mt-2 flex items-center gap-2 px-5 text-xs text-neutral-400">
+          <span className="inline-flex gap-0.5">
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-neutral-400 [animation-delay:-0.2s]" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-neutral-400 [animation-delay:-0.1s]" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-neutral-400" />
+          </span>
+          {assistantName} 正在处理…
+        </div>
+      )}
     </div>
   );
 }

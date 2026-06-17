@@ -1,5 +1,5 @@
 import { API_URL } from "./config";
-import type { Agent, Channel, ChatEvent, ChatMessage, Doc, KeyStatus } from "./types";
+import type { Agent, Channel, ChannelEvent, ChatMessage, Doc, KeyStatus } from "./types";
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
@@ -48,33 +48,22 @@ export const claudeStart = () => req<{ url: string }>("/api/auth/claude/start", 
 export const claudeFinish = (code: string) =>
   req<{ ok: boolean }>("/api/auth/claude/finish", { method: "POST", body: JSON.stringify({ code }) });
 
-// 流式对话:逐个吐出 SSE 事件(经 agent,可能含工具调用)。
-export async function* streamChat(
-  channelId: string,
-  content: string,
-  agentId?: string,
-  threadId?: string,
-): AsyncGenerator<ChatEvent> {
-  const res = await fetch(`${API_URL}/api/chat/stream`, {
+// 派活:把任务交给后端(立即返回),agent 在后台干,结果经频道流推回。
+export const dispatch = (channelId: string, content: string, agentId?: string, threadId?: string) =>
+  req<{ ok: boolean }>("/api/chat/dispatch", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ channel_id: channelId, content, agent_id: agentId, thread_id: threadId }),
   });
-  const reader = res.body!.getReader();
-  const decoder = new TextDecoder();
-  let buf = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    const parts = buf.split("\n\n");
-    buf = parts.pop() ?? "";
-    for (const part of parts) {
-      const line = part.split("\n").find((l) => l.startsWith("data: "));
-      if (!line) continue;
-      const payload = JSON.parse(line.slice(6));
-      if (payload.done) return;
-      yield payload as ChatEvent;
+
+// 频道实时事件流(SSE):订阅后回调收到 {type:"message"|"activity",...}。返回取消订阅函数。
+export function subscribeChannel(channelId: string, onEvent: (ev: ChannelEvent) => void): () => void {
+  const es = new EventSource(`${API_URL}/api/channels/${channelId}/stream`);
+  es.onmessage = (e) => {
+    try {
+      onEvent(JSON.parse(e.data) as ChannelEvent);
+    } catch {
+      /* 忽略心跳/非 JSON */
     }
-  }
+  };
+  return () => es.close();
 }

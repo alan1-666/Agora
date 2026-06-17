@@ -10,6 +10,7 @@ import (
 	"agora/internal/config"
 	"agora/internal/crypto"
 	"agora/internal/db"
+	"agora/internal/hub"
 	"agora/internal/server"
 	"agora/internal/store"
 )
@@ -26,7 +27,7 @@ func main() {
 	log.Println("db connected + schema ready")
 
 	st := store.New(database.Pool, crypto.New(cfg.AppSecret))
-	srv := server.New(cfg, st)
+	srv := server.New(cfg, st, hub.New())
 
 	r := gin.Default()
 	corsCfg := cors.DefaultConfig()

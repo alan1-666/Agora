@@ -105,11 +105,12 @@ func (s *Store) ChannelExists(ctx context.Context, id string) (bool, error) {
 // ---------- 消息 ----------
 
 type Message struct {
-	ID         string `json:"id"`
-	Role       string `json:"role"`
-	Content    string `json:"content"`
-	Seq        int64  `json:"seq"`
-	ReplyCount int    `json:"reply_count"`
+	ID         string  `json:"id"`
+	Role       string  `json:"role"`
+	Content    string  `json:"content"`
+	Seq        int64   `json:"seq"`
+	ReplyCount int     `json:"reply_count"`
+	ParentID   *string `json:"parent_id"`
 }
 
 func scanMessages(rows pgx.Rows) ([]Message, error) {
@@ -117,7 +118,7 @@ func scanMessages(rows pgx.Rows) ([]Message, error) {
 	out := []Message{}
 	for rows.Next() {
 		var m Message
-		if err := rows.Scan(&m.ID, &m.Role, &m.Content, &m.Seq, &m.ReplyCount); err != nil {
+		if err := rows.Scan(&m.ID, &m.Role, &m.Content, &m.Seq, &m.ReplyCount, &m.ParentID); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
@@ -129,7 +130,7 @@ func scanMessages(rows pgx.Rows) ([]Message, error) {
 func (s *Store) ListMessages(ctx context.Context, channelID string) ([]Message, error) {
 	rows, err := s.pool.Query(ctx,
 		`SELECT m.id, m.role, m.content, m.seq,
-		        (SELECT count(*) FROM messages r WHERE r.parent_id = m.id) AS reply_count
+		        (SELECT count(*) FROM messages r WHERE r.parent_id = m.id) AS reply_count, m.parent_id
 		 FROM messages m WHERE m.channel_id=$1 AND m.parent_id IS NULL ORDER BY m.seq`, channelID)
 	if err != nil {
 		return nil, err
@@ -140,7 +141,7 @@ func (s *Store) ListMessages(ctx context.Context, channelID string) ([]Message, 
 // ListThread 返回某条根消息及其线程内全部回复。
 func (s *Store) ListThread(ctx context.Context, rootID string) ([]Message, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, role, content, seq, 0 FROM messages
+		`SELECT id, role, content, seq, 0, parent_id FROM messages
 		 WHERE id=$1 OR parent_id=$1 ORDER BY seq`, rootID)
 	if err != nil {
 		return nil, err
@@ -148,13 +149,16 @@ func (s *Store) ListThread(ctx context.Context, rootID string) ([]Message, error
 	return scanMessages(rows)
 }
 
-// AddMessage 写一条消息。parentID 非空表示这是某线程内的回复。
-func (s *Store) AddMessage(ctx context.Context, channelID, role, content string, parentID *string) error {
-	_, err := s.pool.Exec(ctx,
+// AddMessage 写一条消息并返回它(含 id/parent_id,供事件推送)。parentID 非空=线程内回复。
+func (s *Store) AddMessage(ctx context.Context, channelID, role, content string, parentID *string) (Message, error) {
+	var m Message
+	err := s.pool.QueryRow(ctx,
 		`INSERT INTO messages (channel_id, seq, role, content, parent_id)
-		 VALUES ($1, (SELECT COALESCE(MAX(seq),0)+1 FROM messages WHERE channel_id=$1), $2, $3, $4)`,
-		channelID, role, content, parentID)
-	return err
+		 VALUES ($1, (SELECT COALESCE(MAX(seq),0)+1 FROM messages WHERE channel_id=$1), $2, $3, $4)
+		 RETURNING id, role, content, seq, 0, parent_id`,
+		channelID, role, content, parentID).
+		Scan(&m.ID, &m.Role, &m.Content, &m.Seq, &m.ReplyCount, &m.ParentID)
+	return m, err
 }
 
 // ---------- Agents ----------
