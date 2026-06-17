@@ -23,7 +23,7 @@ export default function MessageItem({
       <div className="w-8 shrink-0">
         {!grouped && (
           <div
-            className="flex h-8 w-8 items-center justify-center rounded-md text-sm font-bold text-white"
+            className="flex h-8 w-8 items-center justify-center rounded-xl text-sm font-bold text-white"
             style={{ background: bg }}
           >
             {initial(author)}

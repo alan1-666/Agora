@@ -35,7 +35,7 @@ export default function ChatPage() {
     <div className="flex min-h-0 flex-1">
       {/* 主时间线 */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-5">
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-hairline bg-white px-5">
           <span className="text-base font-semibold text-neutral-900">
             {isDm ? (
               <>
@@ -54,7 +54,7 @@ export default function ChatPage() {
         </header>
 
         {items.length === 0 && !streaming ? (
-          <Empty members={agents.map((a) => a.name)} />
+          <Empty isDm={isDm} dmName={active?.name} members={agents.map((a) => a.name)} />
         ) : (
           <MessageList
             items={items}
@@ -89,14 +89,20 @@ export default function ChatPage() {
   );
 }
 
-function Empty({ members }: { members: string[] }) {
+function Empty({ isDm, dmName, members }: { isDm: boolean; dmName?: string; members: string[] }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6 text-center text-neutral-400">
-      <div className="mb-2 text-4xl">💬</div>
-      <p className="max-w-sm text-sm">
-        和 AI 同事开始协作。直接发消息，或 <b className="text-neutral-500">@{members[0] ?? "助手"}</b>{" "}
-        指定某位成员接手。回复某条消息可在右侧开 <b className="text-neutral-500">线程</b> 深入。
-      </p>
+      <div className="mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-brand-soft text-2xl">💬</div>
+      {isDm ? (
+        <p className="max-w-sm text-sm">
+          和 <b className="text-neutral-600">{dmName}</b> 的私信。直接发消息开始吧。
+        </p>
+      ) : (
+        <p className="max-w-sm text-sm">
+          和 AI 同事开始协作。直接发消息，或 <b className="text-neutral-600">@{members[0] ?? "助手"}</b>{" "}
+          指定某位成员接手；回复某条消息可在右侧开 <b className="text-neutral-600">线程</b> 深入。
+        </p>
+      )}
     </div>
   );
 }

@@ -116,7 +116,7 @@ export default function SettingsPage() {
 function Page({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="flex-1 overflow-y-auto">
-      <header className="flex h-14 items-center border-b border-neutral-200 bg-white px-6 font-semibold">
+      <header className="flex h-14 items-center border-b border-hairline bg-white px-6 font-semibold">
         {title}
       </header>
       <div className="mx-auto max-w-2xl p-6">{children}</div>
@@ -125,7 +125,7 @@ function Page({ title, children }: { title: string; children: React.ReactNode })
 }
 function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <section className="mb-5 rounded-xl border border-neutral-200 bg-white p-5">
+    <section className="mb-5 rounded-2xl border border-hairline bg-white p-5">
       <h2 className="font-semibold text-neutral-900">
         {title}
         {subtitle && <span className="ml-2 text-xs font-normal text-neutral-400">{subtitle}</span>}
@@ -176,7 +176,7 @@ function Button({
     <button
       onClick={onClick}
       disabled={disabled}
-      className="shrink-0 rounded-lg bg-brand-ink px-4 py-2 text-sm font-semibold text-brand transition-opacity disabled:opacity-40"
+      className="shrink-0 rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white transition-opacity disabled:opacity-40"
     >
       {children}
     </button>

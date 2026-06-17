@@ -31,66 +31,56 @@ export default function Sidebar() {
     if (name) await create(name);
   }
 
+  const item = (selected: boolean) =>
+    `flex items-center gap-2 truncate rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
+      selected ? "bg-brand-soft font-medium text-brand" : "text-neutral-600 hover:bg-black/5"
+    }`;
+
   return (
-    <aside className="flex h-screen w-60 shrink-0 flex-col bg-sidebar text-neutral-300">
+    <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-hairline bg-rail">
       {/* 工作区标题 */}
-      <div className="flex items-center gap-2 px-4 py-4">
-        <div className="flex h-7 w-7 items-center justify-center rounded-md bg-brand text-sm font-black text-brand-ink">
+      <div className="flex items-center gap-2.5 px-4 py-4">
+        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand text-sm font-black text-white shadow-sm">
           A
         </div>
-        <div className="font-semibold text-white">Agora</div>
+        <div className="font-semibold text-ink">Agora</div>
       </div>
 
-      {/* 频道 */}
-      <div className="mt-1 flex items-center justify-between px-4 py-1 text-xs font-medium text-neutral-500">
-        <span>频道</span>
-        <button onClick={newChannel} className="rounded px-1 text-neutral-400 hover:text-brand" title="新建频道">
-          ＋
-        </button>
-      </div>
       <nav className="flex-1 overflow-y-auto px-2">
+        {/* 频道 */}
+        <div className="mb-1 flex items-center justify-between px-2.5 text-xs font-semibold uppercase tracking-wide text-neutral-400">
+          <span>频道</span>
+          <button onClick={newChannel} className="text-neutral-400 hover:text-brand" title="新建频道">
+            ＋
+          </button>
+        </div>
         <div className="space-y-0.5">
-          {channels.map((c) => {
-            const selected = onChat && c.id === activeId;
-            return (
-              <Link
-                key={c.id}
-                href="/chat"
-                onClick={() => setActiveId(c.id)}
-                className={`block truncate rounded-md px-2 py-1.5 text-sm transition-colors ${
-                  selected ? "bg-brand/15 font-medium text-brand" : "text-neutral-300 hover:bg-white/5"
-                }`}
-              >
-                <span className="text-neutral-500">#</span> {c.name}
-              </Link>
-            );
-          })}
+          {channels.map((c) => (
+            <Link key={c.id} href="/chat" onClick={() => setActiveId(c.id)} className={item(onChat && c.id === activeId)}>
+              <span className="text-neutral-400">#</span> {c.name}
+            </Link>
+          ))}
         </div>
 
-        {/* 私信:和某个 AI 成员一对一 */}
-        <div className="mt-4 mb-1 px-2 text-xs font-medium text-neutral-500">私信</div>
+        {/* 私信 */}
+        <div className="mb-1 mt-5 px-2.5 text-xs font-semibold uppercase tracking-wide text-neutral-400">私信</div>
         <div className="space-y-0.5">
-          {agents.map((a) => {
-            const dmActive = onChat && activeId != null && a.name === activeDmName;
-            return (
-              <Link
-                key={a.id}
-                href="/chat"
-                onClick={() => openDm(a.id)}
-                className={`flex items-center gap-2 truncate rounded-md px-2 py-1.5 text-sm transition-colors ${
-                  dmActive ? "bg-brand/15 font-medium text-brand" : "text-neutral-300 hover:bg-white/5"
-                }`}
+          {agents.map((a) => (
+            <Link
+              key={a.id}
+              href="/chat"
+              onClick={() => openDm(a.id)}
+              className={item(onChat && a.name === activeDmName)}
+            >
+              <span
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                style={{ background: avatarColor(a.name) }}
               >
-                <span
-                  className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-[9px] font-bold text-white"
-                  style={{ background: avatarColor(a.name) }}
-                >
-                  {initial(a.name)}
-                </span>
-                {a.name}
-              </Link>
-            );
-          })}
+                {initial(a.name)}
+              </span>
+              {a.name}
+            </Link>
+          ))}
         </div>
       </nav>
 
@@ -100,11 +90,11 @@ export default function Sidebar() {
           <Link
             key={n.href}
             href={n.href}
-            className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${
-              pathname === n.href ? "bg-white/10 text-white" : "text-neutral-400 hover:bg-white/5"
+            className={`flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
+              pathname === n.href ? "bg-black/[0.06] font-medium text-ink" : "text-neutral-600 hover:bg-black/5"
             }`}
           >
-            <span>{n.icon}</span> {n.label}
+            <span className="text-base">{n.icon}</span> {n.label}
           </Link>
         ))}
       </div>
@@ -112,18 +102,14 @@ export default function Sidebar() {
       {/* 模型接入状态 */}
       <Link
         href="/settings"
-        className="flex items-center gap-2 border-t border-white/10 px-4 py-3 text-xs hover:bg-white/5"
+        className="flex items-center gap-2 border-t border-hairline px-4 py-3 text-xs text-neutral-500 hover:bg-black/5"
       >
-        <span
-          className={`h-2 w-2 rounded-full ${key?.configured ? "bg-green-400" : "bg-orange-400"}`}
-        />
-        <span className="text-neutral-400">
-          {key == null
-            ? "…"
-            : key.configured
-              ? `已接入 · ${key.kind === "oauth" ? "Claude 登录" : "API Key"}`
-              : "未接入模型"}
-        </span>
+        <span className={`h-2 w-2 rounded-full ${key?.configured ? "bg-emerald-500" : "bg-amber-500"}`} />
+        {key == null
+          ? "…"
+          : key.configured
+            ? `已接入 · ${key.kind === "oauth" ? "Claude 登录" : "API Key"}`
+            : "未接入模型"}
       </Link>
     </aside>
   );

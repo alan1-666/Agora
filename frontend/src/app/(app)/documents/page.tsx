@@ -35,7 +35,7 @@ export default function DocumentsPage() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <header className="flex h-14 items-center border-b border-neutral-200 bg-white px-6 font-semibold">
+      <header className="flex h-14 items-center border-b border-hairline bg-white px-6 font-semibold">
         资料库
       </header>
       <div className="mx-auto max-w-2xl p-6">
@@ -43,7 +43,7 @@ export default function DocumentsPage() {
           上传文本资料后，agent 回答时会自动检索相关内容并参考、标注来源（RAG）。
         </p>
 
-        <section className="mb-6 rounded-xl border border-neutral-200 bg-white p-5">
+        <section className="mb-6 rounded-2xl border border-hairline bg-white p-5">
           <label className="mb-3 block">
             <span className="mb-1 block text-sm font-medium text-neutral-700">资料名称</span>
             <input
@@ -66,7 +66,7 @@ export default function DocumentsPage() {
           <button
             onClick={upload}
             disabled={saving || !name.trim() || !text.trim()}
-            className="rounded-lg bg-brand-ink px-4 py-2 text-sm font-semibold text-brand disabled:opacity-40"
+            className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
           >
             {saving ? "上传中…" : "上传"}
           </button>
@@ -74,7 +74,7 @@ export default function DocumentsPage() {
         </section>
 
         <h2 className="mb-2 text-sm font-semibold text-neutral-700">已有资料（{docs.length}）</h2>
-        <ul className="divide-y divide-neutral-100 overflow-hidden rounded-xl border border-neutral-200 bg-white">
+        <ul className="divide-y divide-neutral-100 overflow-hidden rounded-2xl border border-hairline bg-white">
           {docs.length === 0 && <li className="px-4 py-3 text-sm text-neutral-400">还没有资料</li>}
           {docs.map((d) => (
             <li key={d.id} className="flex items-center gap-2 px-4 py-3 text-sm text-neutral-700">

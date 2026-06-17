@@ -11,3 +11,7 @@
  GET /chat 200 in 219ms (next.js: 89ms, application-code: 130ms)
  GET /chat 200 in 27ms (next.js: 6ms, application-code: 21ms)
  GET /chat 200 in 37ms (next.js: 5ms, application-code: 32ms)
+✓ Compiled in 103ms
+ GET /chat 200 in 47ms (next.js: 11ms, application-code: 36ms)
+ GET /agents 200 in 70ms (next.js: 35ms, application-code: 34ms)
+ GET /settings 200 in 54ms (next.js: 21ms, application-code: 33ms)

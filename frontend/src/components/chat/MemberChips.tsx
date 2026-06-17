@@ -23,8 +23,8 @@ export default function MemberChips({
             title={`${a.name} · ${a.tools.length} 工具`}
             className={`flex items-center gap-1.5 rounded-full border py-1 pl-1 pr-2.5 text-xs transition-colors ${
               active
-                ? "border-brand bg-brand/10 text-neutral-900"
-                : "border-neutral-200 text-neutral-600 hover:border-neutral-300"
+                ? "border-brand/40 bg-brand-soft font-medium text-brand"
+                : "border-hairline text-neutral-600 hover:bg-black/[0.03]"
             }`}
           >
             <span

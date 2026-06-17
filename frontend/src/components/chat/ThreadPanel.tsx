@@ -30,8 +30,8 @@ export default function ThreadPanel({
   }
 
   return (
-    <aside className="flex w-[420px] shrink-0 flex-col border-l border-neutral-200 bg-white">
-      <header className="flex h-14 items-center justify-between border-b border-neutral-200 px-4">
+    <aside className="flex w-[420px] shrink-0 flex-col border-l border-hairline bg-white">
+      <header className="flex h-14 items-center justify-between border-b border-hairline px-4">
         <div className="min-w-0">
           <div className="text-sm font-semibold text-neutral-900">线程</div>
           <div className="truncate text-xs text-neutral-400">{rootPreview}</div>
