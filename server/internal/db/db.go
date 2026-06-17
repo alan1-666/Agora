@@ -50,6 +50,13 @@ func (d *DB) initSchema(ctx context.Context) error {
 		)`,
 		// 线程:parent_id 指向所属线程的根消息;根消息 parent_id 为 NULL。
 		`ALTER TABLE messages ADD COLUMN IF NOT EXISTS parent_id UUID`,
+		// 频道成员:哪些 agent 在这个频道。
+		`CREATE TABLE IF NOT EXISTS channel_members (
+			channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+			agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+			PRIMARY KEY (channel_id, agent_id)
+		)`,
 	}
 	for _, s := range stmts {
 		if _, err := d.Pool.Exec(ctx, s); err != nil {

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -36,6 +37,9 @@ func (s *Server) Routes(r *gin.Engine) {
 	api.DELETE("/agents/:id", s.deleteAgent)
 	api.GET("/channels", s.listChannels)
 	api.POST("/channels", s.createChannel)
+	api.GET("/channels/:id/members", s.listMembers)
+	api.POST("/channels/:id/members", s.addMember)
+	api.DELETE("/channels/:id/members/:agentId", s.removeMember)
 	api.GET("/dms", s.listDMs)
 	api.POST("/dms", s.openDM)
 	api.GET("/channels/:id/messages", s.listMessages)
@@ -51,8 +55,8 @@ func (s *Server) runtimeStatus(c *gin.Context) {
 	c.JSON(200, gin.H{"available": runtime.Available(), "version": runtime.Version()})
 }
 
-func (s *Server) seedDefaults(c *gin.Context) ([]store.Agent, error) {
-	a, err := s.st.CreateAgent(c, store.Agent{
+func (s *Server) seedDefaults(ctx context.Context) ([]store.Agent, error) {
+	a, err := s.st.CreateAgent(ctx, store.Agent{
 		Name:         "助手",
 		SystemPrompt: "你是 Agora 里的 AI 助手,友好、简洁、直接,用提问者的语言回答。",
 		Tools:        []string{},
@@ -147,7 +151,67 @@ func (s *Server) createChannel(c *gin.Context) {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
+	// 新频道默认拉入当前全部 agent 作为成员
+	if agents, e := s.st.ListAgents(c); e == nil {
+		for _, a := range agents {
+			_ = s.st.AddChannelMember(c, ch.ID, a.ID)
+		}
+	}
 	c.JSON(200, ch)
+}
+
+// channelMembers 取频道成员;为空(旧频道)则自动补全为当前全部 agent。
+func (s *Server) channelMembers(ctx context.Context, channelID string) ([]store.Agent, error) {
+	mem, err := s.st.ListChannelMembers(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+	if len(mem) == 0 {
+		agents, err := s.st.ListAgents(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(agents) == 0 {
+			agents, _ = s.seedDefaults(ctx)
+		}
+		for _, a := range agents {
+			_ = s.st.AddChannelMember(ctx, channelID, a.ID)
+		}
+		mem = agents
+	}
+	return mem, nil
+}
+
+func (s *Server) listMembers(c *gin.Context) {
+	mem, err := s.channelMembers(c, c.Param("id"))
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, mem)
+}
+
+func (s *Server) addMember(c *gin.Context) {
+	var req struct {
+		AgentID string `json:"agent_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.AgentID == "" {
+		c.JSON(400, gin.H{"error": "缺少 agent_id"})
+		return
+	}
+	if err := s.st.AddChannelMember(c, c.Param("id"), req.AgentID); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"ok": true})
+}
+
+func (s *Server) removeMember(c *gin.Context) {
+	if err := s.st.RemoveChannelMember(c, c.Param("id"), c.Param("agentId")); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"ok": true})
 }
 
 func (s *Server) listDMs(c *gin.Context) {
@@ -245,13 +309,14 @@ func (s *Server) dispatch(c *gin.Context) {
 		return
 	}
 
-	agents, _ := s.st.ListAgents(c)
-	if len(agents) == 0 {
-		agents, _ = s.seedDefaults(c)
+	members, _ := s.channelMembers(c, req.ChannelID)
+	if len(members) == 0 {
+		c.JSON(400, gin.H{"error": "该频道没有成员"})
+		return
 	}
-	ag := agents[0]
+	ag := members[0]
 	if req.AgentID != "" {
-		for _, a := range agents {
+		for _, a := range members {
 			if a.ID == req.AgentID {
 				ag = a
 			}
@@ -262,7 +327,6 @@ func (s *Server) dispatch(c *gin.Context) {
 	if req.ThreadID != "" {
 		parent = &req.ThreadID
 	}
-	// 存用户消息并立即推给订阅者
 	userMsg, err := s.st.AddMessage(c, req.ChannelID, "user", req.Content, parent)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
@@ -270,44 +334,83 @@ func (s *Server) dispatch(c *gin.Context) {
 	}
 	s.hub.Publish(req.ChannelID, hub.Event{"type": "message", "message": userMsg})
 
-	model := ""
-	if ag.Model != nil {
-		model = *ag.Model
-	}
-
 	c.JSON(202, gin.H{"ok": true})
 
-	// 后台交给本机 claude CLI 干活(用用户订阅,无需 key)
-	go s.runTask(req.ChannelID, req.ThreadID, parent, req.Content, ag.Name, ag.SystemPrompt, model)
+	go s.runAgentTask(req.ChannelID, req.ThreadID, parent, ag, members, 0, "")
 }
 
-func (s *Server) runTask(channelID, threadID string, parent *string, content, agentName, system, model string) {
+const maxRelayHops = 3
+
+// runAgentTask 让某 agent 在频道里干活;若回复里 @了本频道其他成员,自动接力派活(hop 上限防循环)。
+func (s *Server) runAgentTask(channelID, threadID string, parent *string, ag store.Agent, members []store.Agent, hop int, nudge string) {
 	ctx := context.Background()
 	pub := func(ev hub.Event) { s.hub.Publish(channelID, ev) }
-	pub(hub.Event{"type": "activity", "state": "working", "agent": agentName})
+	pub(hub.Event{"type": "activity", "state": "working", "agent": ag.Name})
 
-	// 历史(线程或频道)作为上下文,去掉最后一条(就是刚存的当前消息)
 	var history []store.Message
 	if parent != nil {
 		history, _ = s.st.ListThread(ctx, threadID)
 	} else {
 		history, _ = s.st.ListMessages(ctx, channelID)
 	}
+	// 最后一条是"当前触发消息",其余作为历史上下文
+	content := ""
 	var hist []runtime.Msg
 	for i, m := range history {
 		if i == len(history)-1 {
+			content = m.Content
 			break
 		}
 		hist = append(hist, runtime.Msg{Role: m.Role, Content: m.Content})
 	}
 
+	model := ""
+	if ag.Model != nil {
+		model = *ag.Model
+	}
+	system := ag.SystemPrompt + rosterPrompt(members, ag.Name) + nudge
+
 	answer, err := runtime.RunClaude(ctx, system, model, hist, content)
 	if err != nil {
 		pub(hub.Event{"type": "activity", "kind": "error", "text": err.Error()})
-	} else if answer != "" {
+		pub(hub.Event{"type": "activity", "state": "done"})
+		return
+	}
+	if answer != "" {
 		if m, e := s.st.AddMessage(ctx, channelID, "assistant", answer, parent); e == nil {
 			pub(hub.Event{"type": "message", "message": m})
 		}
 	}
 	pub(hub.Event{"type": "activity", "state": "done"})
+
+	// 接力:回复里 @了本频道其他成员 → 自动派活给 TA
+	if hop < maxRelayHops && answer != "" {
+		for _, m := range members {
+			if m.Name != ag.Name && strings.Contains(answer, "@"+m.Name) {
+				nudge := "\n\n【接力】你被「" + ag.Name + "」在频道里 @ 了,请基于上文接力处理你那部分,简洁作答。"
+				go s.runAgentTask(channelID, threadID, parent, m, members, hop+1, nudge)
+			}
+		}
+	}
+}
+
+// rosterPrompt 告诉 agent 本频道还有哪些成员、可以 @ 谁接力。
+func rosterPrompt(members []store.Agent, self string) string {
+	var b strings.Builder
+	first := true
+	for _, m := range members {
+		if m.Name == self {
+			continue
+		}
+		if first {
+			b.WriteString("\n\n【本频道其他成员】需要时可在回复中 @某成员 让 TA 接力处理(只 @ 真正需要的):")
+			first = false
+		}
+		sp := m.SystemPrompt
+		if r := []rune(sp); len(r) > 50 {
+			sp = string(r[:50])
+		}
+		b.WriteString("\n- @" + m.Name + "：" + sp)
+	}
+	return b.String()
 }

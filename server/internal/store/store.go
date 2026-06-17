@@ -224,3 +224,29 @@ func (s *Store) DeleteAgent(ctx context.Context, id string) error {
 	_, err := s.pool.Exec(ctx, `DELETE FROM agents WHERE id=$1`, id)
 	return err
 }
+
+// ---------- 频道成员 ----------
+
+func (s *Store) ListChannelMembers(ctx context.Context, channelID string) ([]Agent, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT a.id, a.name, a.system_prompt, a.model, a.tools
+		 FROM channel_members m JOIN agents a ON a.id = m.agent_id
+		 WHERE m.channel_id=$1 ORDER BY m.created_at`, channelID)
+	if err != nil {
+		return nil, err
+	}
+	return scanAgents(rows)
+}
+
+func (s *Store) AddChannelMember(ctx context.Context, channelID, agentID string) error {
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO channel_members (channel_id, agent_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+		channelID, agentID)
+	return err
+}
+
+func (s *Store) RemoveChannelMember(ctx context.Context, channelID, agentID string) error {
+	_, err := s.pool.Exec(ctx,
+		`DELETE FROM channel_members WHERE channel_id=$1 AND agent_id=$2`, channelID, agentID)
+	return err
+}
