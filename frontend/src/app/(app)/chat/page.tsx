@@ -2,38 +2,43 @@
 
 import { useState } from "react";
 import Composer from "@/components/chat/Composer";
-import MemberChips from "@/components/chat/MemberChips";
+import MembersBar from "@/components/chat/MembersBar";
 import MessageList from "@/components/chat/MessageList";
 import ThreadPanel from "@/components/chat/ThreadPanel";
 import { useWorkspace } from "@/components/workspace-context";
+import { useChannelMembers } from "@/hooks/useChannelMembers";
 import { useChat } from "@/hooks/useChat";
 import { resolveMention } from "@/lib/format";
 
 export default function ChatPage() {
-  const { active, agents, agentId, setAgentId, activeAgent } = useWorkspace();
+  const { active, agents, agentId, setAgentId } = useWorkspace();
   const isDm = active?.kind === "dm";
-  // DM 锁定为私信对象;普通频道用当前选中成员
-  const effectiveAgentId = isDm ? active?.agent_id ?? "" : agentId;
+  const { members, add, remove } = useChannelMembers(active?.id ?? null, isDm);
+
+  // 当前接手者:DM 锁定私信对象;频道用选中成员(默认第一个成员)
+  const selectedMemberId = members.some((m) => m.id === agentId) ? agentId : members[0]?.id ?? "";
+  const effectiveAgentId = isDm ? active?.agent_id ?? "" : selectedMemberId;
   const { items, streaming, send, reload } = useChat(active?.id ?? null, effectiveAgentId);
-  const assistantName = isDm ? active?.name ?? "AI" : activeAgent?.name ?? "AI";
+  const assistantName = isDm
+    ? active?.name ?? "AI"
+    : members.find((m) => m.id === selectedMemberId)?.name ?? "AI";
   const [thread, setThread] = useState<{ id: string; preview: string } | null>(null);
 
   function onSend(text: string) {
     if (isDm) {
-      send(text); // DM 固定对象,不解析 @
+      send(text);
       return;
     }
-    const mentioned = resolveMention(text, agents);
+    const mentioned = resolveMention(text, members);
     send(text, mentioned?.id);
   }
   function closeThread() {
     setThread(null);
-    reload(); // 回到主时间线时刷新回复数
+    reload();
   }
 
   return (
     <div className="flex min-h-0 flex-1">
-      {/* 主时间线 */}
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-hairline bg-white px-5">
           <span className="text-base font-semibold text-neutral-900">
@@ -50,11 +55,20 @@ export default function ChatPage() {
               </>
             )}
           </span>
-          {!isDm && <MemberChips agents={agents} selectedId={agentId} onSelect={setAgentId} />}
+          {!isDm && (
+            <MembersBar
+              members={members}
+              agents={agents}
+              selectedId={selectedMemberId}
+              onSelect={setAgentId}
+              onAdd={add}
+              onRemove={remove}
+            />
+          )}
         </header>
 
         {items.length === 0 && !streaming ? (
-          <Empty isDm={isDm} dmName={active?.name} members={agents.map((a) => a.name)} />
+          <Empty isDm={isDm} dmName={active?.name} members={members.map((m) => m.name)} />
         ) : (
           <MessageList
             items={items}
@@ -73,12 +87,11 @@ export default function ChatPage() {
         />
       </div>
 
-      {/* 线程面板 */}
       {thread && active && (
         <ThreadPanel
           channelId={active.id}
           agentId={effectiveAgentId}
-          agents={isDm ? [] : agents}
+          agents={isDm ? [] : members}
           assistantName={assistantName}
           rootId={thread.id}
           rootPreview={thread.preview}
@@ -98,9 +111,9 @@ function Empty({ isDm, dmName, members }: { isDm: boolean; dmName?: string; memb
           和 <b className="text-neutral-600">{dmName}</b> 的私信。直接发消息开始吧。
         </p>
       ) : (
-        <p className="max-w-sm text-sm">
-          和 AI 同事开始协作。直接发消息，或 <b className="text-neutral-600">@{members[0] ?? "助手"}</b>{" "}
-          指定某位成员接手；回复某条消息可在右侧开 <b className="text-neutral-600">线程</b> 深入。
+        <p className="max-w-sm text-sm leading-relaxed">
+          和频道里的 AI 同事开始协作。直接发消息，或 <b className="text-neutral-600">@{members[0] ?? "成员"}</b>{" "}
+          指定谁接手；成员之间也能互相 @ 接力。回复某条消息可在右侧开 <b className="text-neutral-600">线程</b>。
         </p>
       )}
     </div>

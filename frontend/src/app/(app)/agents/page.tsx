@@ -43,7 +43,10 @@ export default function AgentsPage() {
         </p>
         <div className="space-y-3">
           {agents.map((a) => (
-            <div key={a.id} className="flex items-start gap-3 rounded-2xl border border-hairline bg-white p-4">
+            <div
+              key={a.id}
+              className="group flex items-start gap-3 rounded-2xl border border-hairline bg-white p-4 transition-colors hover:border-brand/30"
+            >
               <span
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white"
                 style={{ background: avatarColor(a.name) }}
@@ -98,37 +101,59 @@ function EditModal({
   onClose: () => void;
   onSave: () => void;
 }) {
+  const inputCls =
+    "w-full rounded-xl border border-hairline bg-canvas px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-brand/50 focus:bg-white focus:ring-4 focus:ring-brand-soft";
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <h2 className="mb-4 font-semibold">{isNew ? "新建成员" : "编辑成员"}</h2>
-        <label className="mb-3 block">
-          <span className="mb-1 block text-sm font-medium text-neutral-700">名字</span>
+    <div
+      className="animate-overlay fixed inset-0 z-50 flex items-center justify-center bg-ink/25 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="animate-pop w-full max-w-lg rounded-3xl border border-hairline bg-white p-6 shadow-[0_24px_70px_-15px_rgba(19,23,34,0.3)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-5 flex items-center gap-3">
+          <span
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-base font-bold text-white"
+            style={{ background: avatarColor(value.name || "新") }}
+          >
+            {initial(value.name || "新")}
+          </span>
+          <div>
+            <h2 className="text-base font-semibold text-ink">{isNew ? "新建成员" : "编辑成员"}</h2>
+            <p className="text-xs text-neutral-400">一个有自己人设的 AI 同事</p>
+          </div>
+        </div>
+        <label className="mb-4 block">
+          <span className="mb-1.5 block text-sm font-medium text-neutral-700">名字</span>
           <input
             value={value.name}
             onChange={(e) => onChange({ ...value, name: e.target.value })}
             placeholder="如：翻译、调研、文案"
-            className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-400"
+            className={inputCls}
           />
         </label>
-        <label className="mb-4 block">
-          <span className="mb-1 block text-sm font-medium text-neutral-700">人设（system prompt）</span>
+        <label className="mb-5 block">
+          <span className="mb-1.5 block text-sm font-medium text-neutral-700">人设（system prompt）</span>
           <textarea
             value={value.system_prompt}
             onChange={(e) => onChange({ ...value, system_prompt: e.target.value })}
-            rows={4}
+            rows={5}
             placeholder="描述这个成员是谁、擅长什么、怎么干活。"
-            className="w-full resize-y rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-400"
+            className={`${inputCls} resize-y leading-relaxed`}
           />
         </label>
         <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-neutral-500 hover:bg-neutral-100">
+          <button
+            onClick={onClose}
+            className="rounded-full px-4 py-2 text-sm font-medium text-neutral-500 transition-colors hover:bg-black/[0.04] hover:text-neutral-700"
+          >
             取消
           </button>
           <button
             onClick={onSave}
             disabled={!value.name.trim()}
-            className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+            className="rounded-full bg-brand px-5 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-brand-hover disabled:opacity-40 disabled:shadow-none"
           >
             保存
           </button>

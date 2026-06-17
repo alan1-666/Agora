@@ -16,6 +16,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { channels, active, activeId, setActiveId, create, agents, openDm } = useWorkspace();
   const [rt, setRt] = useState<{ available: boolean; version: string } | null>(null);
+  const [creating, setCreating] = useState(false);
   const activeDmName = active?.kind === "dm" ? active.name : null;
 
   useEffect(() => {
@@ -24,9 +25,9 @@ export default function Sidebar() {
 
   const onChat = pathname === "/chat";
 
-  async function newChannel() {
-    const name = prompt("频道名称", "新频道");
-    if (name) await create(name);
+  async function submitChannel(name: string) {
+    await create(name);
+    setCreating(false);
   }
 
   const item = (selected: boolean) =>
@@ -48,7 +49,7 @@ export default function Sidebar() {
         {/* 频道 */}
         <div className="mb-1 flex items-center justify-between px-2.5 text-xs font-semibold uppercase tracking-wide text-neutral-400">
           <span>频道</span>
-          <button onClick={newChannel} className="text-neutral-400 hover:text-brand" title="新建频道">
+          <button onClick={() => setCreating(true)} className="text-neutral-400 hover:text-brand" title="新建频道">
             ＋
           </button>
         </div>
@@ -105,6 +106,53 @@ export default function Sidebar() {
         <span className={`h-2 w-2 rounded-full ${rt?.available ? "bg-emerald-500" : "bg-amber-500"}`} />
         {rt == null ? "…" : rt.available ? `Claude Code · ${rt.version || "已就绪"}` : "未检测到 claude CLI"}
       </Link>
+
+      {creating && <NewChannelModal onClose={() => setCreating(false)} onCreate={submitChannel} />}
     </aside>
+  );
+}
+
+function NewChannelModal({ onClose, onCreate }: { onClose: () => void; onCreate: (name: string) => void }) {
+  const [name, setName] = useState("");
+  const ok = name.trim().length > 0;
+  return (
+    <div
+      className="animate-overlay fixed inset-0 z-50 flex items-center justify-center bg-ink/25 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="animate-pop w-full max-w-sm rounded-3xl border border-hairline bg-white p-6 shadow-[0_24px_70px_-15px_rgba(19,23,34,0.3)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="mb-1 text-base font-semibold text-ink">新建频道</h2>
+        <p className="mb-4 text-xs text-neutral-400">一个频道是一场公共会话，可以配不同的 AI 成员。</p>
+        <div className="flex items-center gap-2 rounded-xl border border-hairline bg-canvas px-3 transition-colors focus-within:border-brand/50 focus-within:bg-white focus-within:ring-4 focus-within:ring-brand-soft">
+          <span className="text-neutral-400">#</span>
+          <input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && ok && onCreate(name.trim())}
+            placeholder="频道名称"
+            className="flex-1 bg-transparent py-2.5 text-sm outline-none placeholder:text-neutral-400"
+          />
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="rounded-full px-4 py-2 text-sm font-medium text-neutral-500 transition-colors hover:bg-black/[0.04] hover:text-neutral-700"
+          >
+            取消
+          </button>
+          <button
+            onClick={() => ok && onCreate(name.trim())}
+            disabled={!ok}
+            className="rounded-full bg-brand px-5 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-brand-hover disabled:opacity-40 disabled:shadow-none"
+          >
+            创建
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

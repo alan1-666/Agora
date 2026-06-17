@@ -17,6 +17,17 @@ export const createChannel = (name: string) =>
 export const listMessages = (channelId: string) =>
   req<ChatMessage[]>(`/api/channels/${channelId}/messages`);
 export const listThread = (rootId: string) => req<ChatMessage[]>(`/api/threads/${rootId}`);
+
+// 频道成员
+export const listMembers = (channelId: string) => req<Agent[]>(`/api/channels/${channelId}/members`);
+export const addMember = (channelId: string, agentId: string) =>
+  req<{ ok: boolean }>(`/api/channels/${channelId}/members`, {
+    method: "POST",
+    body: JSON.stringify({ agent_id: agentId }),
+  });
+export const removeMember = (channelId: string, agentId: string) =>
+  req<{ ok: boolean }>(`/api/channels/${channelId}/members/${agentId}`, { method: "DELETE" });
+
 export const listDms = () => req<Channel[]>("/api/dms");
 export const openDm = (agentId: string) =>
   req<Channel>("/api/dms", { method: "POST", body: JSON.stringify({ agent_id: agentId }) });
