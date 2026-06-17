@@ -56,6 +56,8 @@ func (d *DB) initSchema(ctx context.Context, dim int) error {
 			content TEXT NOT NULL,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 		)`,
+		// 线程:parent_id 指向所属线程的根消息;根消息 parent_id 为 NULL。
+		`ALTER TABLE messages ADD COLUMN IF NOT EXISTS parent_id UUID`,
 		`CREATE TABLE IF NOT EXISTS memories (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			content TEXT NOT NULL,

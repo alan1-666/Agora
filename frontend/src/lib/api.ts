@@ -16,6 +16,7 @@ export const createChannel = (name: string) =>
   req<Channel>("/api/channels", { method: "POST", body: JSON.stringify({ name }) });
 export const listMessages = (channelId: string) =>
   req<ChatMessage[]>(`/api/channels/${channelId}/messages`);
+export const listThread = (rootId: string) => req<ChatMessage[]>(`/api/threads/${rootId}`);
 
 // agents / 文档
 export const listAgents = () => req<Agent[]>("/api/agents");
@@ -49,11 +50,12 @@ export async function* streamChat(
   channelId: string,
   content: string,
   agentId?: string,
+  threadId?: string,
 ): AsyncGenerator<ChatEvent> {
   const res = await fetch(`${API_URL}/api/chat/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ channel_id: channelId, content, agent_id: agentId }),
+    body: JSON.stringify({ channel_id: channelId, content, agent_id: agentId, thread_id: threadId }),
   });
   const reader = res.body!.getReader();
   const decoder = new TextDecoder();

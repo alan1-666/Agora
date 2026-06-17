@@ -6,7 +6,6 @@
 - Local:         http://localhost:3000
 - Network:       http://192.168.5.8:3000
 - Environments: .env.local
-✓ Ready in 222ms
+✓ Ready in 205ms
 
- GET /agents 200 in 701ms (next.js: 598ms, application-code: 103ms)
- GET /chat 200 in 40ms (next.js: 12ms, application-code: 27ms)
+ GET /chat 200 in 206ms (next.js: 91ms, application-code: 115ms)

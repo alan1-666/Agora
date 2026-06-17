@@ -14,11 +14,17 @@ export type Agent = {
 
 export type Doc = { id: string; name: string };
 
-export type ChatMessage = { role: Role; content: string; seq?: number };
+export type ChatMessage = {
+  id: string;
+  role: Role;
+  content: string;
+  seq?: number;
+  reply_count?: number;
+};
 
 // 聊天流里的一项:用户/助手消息,或一条工具调用记录。
 export type ChatItem =
-  | { kind: "message"; role: Role; content: string }
+  | { kind: "message"; role: Role; content: string; id?: string; replyCount?: number }
   | { kind: "tool"; name: string; input: string; output?: string };
 
 // SSE 流式事件

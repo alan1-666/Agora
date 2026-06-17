@@ -1,21 +1,26 @@
 import { useCallback, useEffect, useState } from "react";
-import { listMessages, streamChat } from "@/lib/api";
+import { listMessages, listThread, streamChat } from "@/lib/api";
 import type { ChatItem } from "@/lib/types";
 
 /**
- * 单个频道的对话:加载历史 + 发送 + 流式接收(含工具调用)。
- * 把流式拼装逻辑收在这里,页面只管渲染 items。
+ * 一个会话的对话(频道主时间线,或某个线程)。threadId 非空时作用于该线程。
+ * 加载历史 + 发送 + 流式接收(含工具调用),流式拼装逻辑收在这里。
  */
-export function useChat(channelId: string | null, agentId: string) {
+export function useChat(channelId: string | null, agentId: string, threadId?: string) {
   const [items, setItems] = useState<ChatItem[]>([]);
   const [streaming, setStreaming] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!channelId) return;
-    listMessages(channelId)
-      .then((ms) => setItems(ms.map((m) => ({ kind: "message", role: m.role, content: m.content }))))
-      .catch(console.error);
-  }, [channelId]);
+    const ms = threadId ? await listThread(threadId) : await listMessages(channelId);
+    setItems(
+      ms.map((m) => ({ kind: "message", role: m.role, content: m.content, id: m.id, replyCount: m.reply_count })),
+    );
+  }, [channelId, threadId]);
+
+  useEffect(() => {
+    load().catch(console.error);
+  }, [load]);
 
   const send = useCallback(
     async (text: string, agentOverride?: string) => {
@@ -27,9 +32,9 @@ export function useChat(channelId: string | null, agentId: string) {
       setStreaming(true);
 
       const targetAgent = agentOverride || agentId;
-      let openAssistant = -1; // 当前正在追加的助手消息下标;-1 表示需新建
+      let openAssistant = -1;
       try {
-        for await (const ev of streamChat(channelId, content, targetAgent || undefined)) {
+        for await (const ev of streamChat(channelId, content, targetAgent || undefined, threadId)) {
           if (ev.delta) {
             if (openAssistant === -1) {
               buf.push({ kind: "message", role: "assistant", content: "" });
@@ -61,8 +66,8 @@ export function useChat(channelId: string | null, agentId: string) {
         setStreaming(false);
       }
     },
-    [channelId, agentId, items, streaming],
+    [channelId, agentId, threadId, items, streaming],
   );
 
-  return { items, streaming, send };
+  return { items, streaming, send, reload: load };
 }

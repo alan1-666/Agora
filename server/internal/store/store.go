@@ -63,22 +63,19 @@ func (s *Store) ChannelExists(ctx context.Context, id string) (bool, error) {
 // ---------- 消息 ----------
 
 type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-	Seq     int64  `json:"seq"`
+	ID         string `json:"id"`
+	Role       string `json:"role"`
+	Content    string `json:"content"`
+	Seq        int64  `json:"seq"`
+	ReplyCount int    `json:"reply_count"`
 }
 
-func (s *Store) ListMessages(ctx context.Context, channelID string) ([]Message, error) {
-	rows, err := s.pool.Query(ctx,
-		`SELECT role, content, seq FROM messages WHERE channel_id=$1 ORDER BY seq`, channelID)
-	if err != nil {
-		return nil, err
-	}
+func scanMessages(rows pgx.Rows) ([]Message, error) {
 	defer rows.Close()
 	out := []Message{}
 	for rows.Next() {
 		var m Message
-		if err := rows.Scan(&m.Role, &m.Content, &m.Seq); err != nil {
+		if err := rows.Scan(&m.ID, &m.Role, &m.Content, &m.Seq, &m.ReplyCount); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
@@ -86,11 +83,35 @@ func (s *Store) ListMessages(ctx context.Context, channelID string) ([]Message, 
 	return out, rows.Err()
 }
 
-func (s *Store) AddMessage(ctx context.Context, channelID, role, content string) error {
+// ListMessages 返回频道的"根消息"(不含线程内回复) + 各自回复数。
+func (s *Store) ListMessages(ctx context.Context, channelID string) ([]Message, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT m.id, m.role, m.content, m.seq,
+		        (SELECT count(*) FROM messages r WHERE r.parent_id = m.id) AS reply_count
+		 FROM messages m WHERE m.channel_id=$1 AND m.parent_id IS NULL ORDER BY m.seq`, channelID)
+	if err != nil {
+		return nil, err
+	}
+	return scanMessages(rows)
+}
+
+// ListThread 返回某条根消息及其线程内全部回复。
+func (s *Store) ListThread(ctx context.Context, rootID string) ([]Message, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, role, content, seq, 0 FROM messages
+		 WHERE id=$1 OR parent_id=$1 ORDER BY seq`, rootID)
+	if err != nil {
+		return nil, err
+	}
+	return scanMessages(rows)
+}
+
+// AddMessage 写一条消息。parentID 非空表示这是某线程内的回复。
+func (s *Store) AddMessage(ctx context.Context, channelID, role, content string, parentID *string) error {
 	_, err := s.pool.Exec(ctx,
-		`INSERT INTO messages (channel_id, seq, role, content)
-		 VALUES ($1, (SELECT COALESCE(MAX(seq),0)+1 FROM messages WHERE channel_id=$1), $2, $3)`,
-		channelID, role, content)
+		`INSERT INTO messages (channel_id, seq, role, content, parent_id)
+		 VALUES ($1, (SELECT COALESCE(MAX(seq),0)+1 FROM messages WHERE channel_id=$1), $2, $3, $4)`,
+		channelID, role, content, parentID)
 	return err
 }
 

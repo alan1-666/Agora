@@ -38,6 +38,7 @@ func (s *Server) Routes(r *gin.Engine) {
 	api.GET("/channels", s.listChannels)
 	api.POST("/channels", s.createChannel)
 	api.GET("/channels/:id/messages", s.listMessages)
+	api.GET("/threads/:id", s.listThread)
 	api.GET("/documents", s.listDocuments)
 	api.POST("/documents", s.uploadDocument)
 	api.GET("/org/key", s.keyStatus)
@@ -196,6 +197,15 @@ func (s *Server) listMessages(c *gin.Context) {
 	c.JSON(200, msgs)
 }
 
+func (s *Server) listThread(c *gin.Context) {
+	msgs, err := s.st.ListThread(c, c.Param("id"))
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, msgs)
+}
+
 // ---------- documents ----------
 
 func (s *Server) listDocuments(c *gin.Context) {
@@ -278,6 +288,7 @@ func (s *Server) chatStream(c *gin.Context) {
 		ChannelID string `json:"channel_id"`
 		Content   string `json:"content"`
 		AgentID   string `json:"agent_id"`
+		ThreadID  string `json:"thread_id"` // 非空=在某线程内回复
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": "参数错误"})
@@ -309,9 +320,18 @@ func (s *Server) chatStream(c *gin.Context) {
 		ag = agents[0]
 	}
 
-	// 存用户消息 + 取历史
-	_ = s.st.AddMessage(c, req.ChannelID, "user", req.Content)
-	history, _ := s.st.ListMessages(c, req.ChannelID)
+	// 线程内回复:消息挂到根消息下,上下文用线程而非整个频道
+	var parent *string
+	if req.ThreadID != "" {
+		parent = &req.ThreadID
+	}
+	_ = s.st.AddMessage(c, req.ChannelID, "user", req.Content, parent)
+	var history []store.Message
+	if parent != nil {
+		history, _ = s.st.ListThread(c, req.ThreadID)
+	} else {
+		history, _ = s.st.ListMessages(c, req.ChannelID)
+	}
 	msgs := make([]map[string]any, 0, len(history))
 	for _, m := range history {
 		msgs = append(msgs, map[string]any{"role": m.Role, "content": m.Content})
@@ -375,7 +395,7 @@ func (s *Server) chatStream(c *gin.Context) {
 	})
 
 	if answer != "" {
-		_ = s.st.AddMessage(c, req.ChannelID, "assistant", answer)
+		_ = s.st.AddMessage(c, req.ChannelID, "assistant", answer, parent)
 	}
 	send(map[string]any{"done": true})
 }
