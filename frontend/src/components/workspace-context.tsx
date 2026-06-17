@@ -10,19 +10,21 @@ type WorkspaceValue = ReturnType<typeof useChannels> & {
   activeAgent: ReturnType<typeof useAgents>["active"];
   agentId: string;
   setAgentId: (id: string) => void;
+  refreshAgents: ReturnType<typeof useAgents>["refresh"];
 };
 
 const Ctx = createContext<WorkspaceValue | null>(null);
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const channels = useChannels();
-  const { agents, active, activeId, setActiveId } = useAgents();
+  const { agents, active, activeId, setActiveId, refresh } = useAgents();
   const value: WorkspaceValue = {
     ...channels,
     agents,
     activeAgent: active,
     agentId: activeId,
     setAgentId: setActiveId,
+    refreshAgents: refresh,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

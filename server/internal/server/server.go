@@ -33,6 +33,8 @@ func (s *Server) Routes(r *gin.Engine) {
 	api.GET("/tools", s.listTools)
 	api.GET("/agents", s.listAgents)
 	api.POST("/agents", s.createAgent)
+	api.PUT("/agents/:id", s.updateAgent)
+	api.DELETE("/agents/:id", s.deleteAgent)
 	api.GET("/channels", s.listChannels)
 	api.POST("/channels", s.createChannel)
 	api.GET("/channels/:id/messages", s.listMessages)
@@ -120,6 +122,39 @@ func (s *Server) createAgent(c *gin.Context) {
 		return
 	}
 	c.JSON(200, a)
+}
+
+func cleanTools(in []string) []string {
+	var out []string
+	for _, t := range in {
+		if _, ok := tools.Registry[t]; ok {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+func (s *Server) updateAgent(c *gin.Context) {
+	var req store.Agent
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": "参数错误"})
+		return
+	}
+	req.Tools = cleanTools(req.Tools)
+	a, err := s.st.UpdateAgent(c, c.Param("id"), req)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, a)
+}
+
+func (s *Server) deleteAgent(c *gin.Context) {
+	if err := s.st.DeleteAgent(c, c.Param("id")); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"ok": true})
 }
 
 // ---------- channels / messages ----------

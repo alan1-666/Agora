@@ -6,15 +6,7 @@
 - Local:         http://localhost:3000
 - Network:       http://192.168.5.8:3000
 - Environments: .env.local
-✓ Ready in 329ms
+✓ Ready in 222ms
 
- GET /chat 200 in 314ms (next.js: 192ms, application-code: 123ms)
- GET / 307 in 233ms (next.js: 129ms, application-code: 103ms)
- GET /chat 200 in 57ms (next.js: 4ms, application-code: 53ms)
-[browser] Uncaught TypeError: Cannot redefine property: ethereum
-    at Object.defineProperty (<anonymous>)
-    at r.inject (chrome-extension://bfnaelmomeimhlpmgjnjophhpkkoljpa/evmAsk.js:15:5093)
-    at Lv.window.addEventListener.once (chrome-extension://bfnaelmomeimhlpmgjnjophhpkkoljpa/evmAsk.js:15:9013)
- GET /settings 200 in 44ms (next.js: 28ms, application-code: 16ms)
- GET /chat 200 in 62ms (next.js: 3ms, application-code: 58ms)
-[?25h
+ GET /agents 200 in 701ms (next.js: 598ms, application-code: 103ms)
+ GET /chat 200 in 40ms (next.js: 12ms, application-code: 27ms)

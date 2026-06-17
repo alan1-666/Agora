@@ -19,6 +19,14 @@ export const listMessages = (channelId: string) =>
 
 // agents / 文档
 export const listAgents = () => req<Agent[]>("/api/agents");
+export const listTools = () => req<{ name: string; description: string }[]>("/api/tools");
+export type AgentInput = { name: string; system_prompt: string; model?: string | null; tools: string[] };
+export const createAgent = (a: AgentInput) =>
+  req<Agent>("/api/agents", { method: "POST", body: JSON.stringify(a) });
+export const updateAgent = (id: string, a: AgentInput) =>
+  req<Agent>(`/api/agents/${id}`, { method: "PUT", body: JSON.stringify(a) });
+export const deleteAgent = (id: string) =>
+  req<{ ok: boolean }>(`/api/agents/${id}`, { method: "DELETE" });
 export const listDocuments = () => req<Doc[]>("/api/documents");
 export const uploadDocument = (name: string, text: string) =>
   req<{ id: string; name: string; chunks: number }>("/api/documents", {

@@ -148,6 +148,20 @@ func (s *Store) CreateAgent(ctx context.Context, a Agent) (Agent, error) {
 	return a, err
 }
 
+func (s *Store) UpdateAgent(ctx context.Context, id string, a Agent) (Agent, error) {
+	err := s.pool.QueryRow(ctx,
+		`UPDATE agents SET name=$2, system_prompt=$3, model=$4, tools=$5 WHERE id=$1
+		 RETURNING id, name, system_prompt, model, tools`,
+		id, a.Name, a.SystemPrompt, a.Model, a.Tools).
+		Scan(&a.ID, &a.Name, &a.SystemPrompt, &a.Model, &a.Tools)
+	return a, err
+}
+
+func (s *Store) DeleteAgent(ctx context.Context, id string) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM agents WHERE id=$1`, id)
+	return err
+}
+
 // ---------- 记忆 / 文档(向量) ----------
 
 func (s *Store) AddMemory(ctx context.Context, content string, vec []float32) error {

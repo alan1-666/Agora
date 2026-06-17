@@ -8,6 +8,7 @@ import type { KeyStatus } from "@/lib/types";
 import { useWorkspace } from "@/components/workspace-context";
 
 const NAV = [
+  { href: "/agents", label: "AI 成员", icon: "🤖" },
   { href: "/documents", label: "资料库", icon: "📄" },
   { href: "/settings", label: "设置", icon: "⚙️" },
 ];
