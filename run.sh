@@ -53,13 +53,15 @@ echo "==> 启动后端 :8000 ..."
 ( exec /tmp/agora-srv ) >logs/backend.log 2>&1 &
 BACK_PID=$!
 
-# 6) 启动前端(首次自动装依赖)
+# 6) 构建并启动前端(生产构建,避免 dev 模式 StrictMode 双挂载导致的请求抖动)
 if [ ! -d frontend/node_modules ]; then
   echo "==> 安装前端依赖(首次)..."
   ( cd frontend && pnpm install )
 fi
+echo "==> 构建前端(约 10-20s)..."
+( cd frontend && pnpm build >../logs/frontend-build.log 2>&1 )
 echo "==> 启动前端 :3000 ..."
-( cd frontend && exec pnpm dev -p 3000 ) >logs/frontend.log 2>&1 &
+( cd frontend && exec pnpm start -p 3000 ) >logs/frontend.log 2>&1 &
 FRONT_PID=$!
 
 sleep 3

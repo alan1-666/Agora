@@ -8,7 +8,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"agora/internal/config"
-	"agora/internal/crypto"
 	"agora/internal/db"
 	"agora/internal/hub"
 	"agora/internal/server"
@@ -19,14 +18,14 @@ func main() {
 	cfg := config.Load()
 	ctx := context.Background()
 
-	database, err := db.New(ctx, cfg.DatabaseURL, cfg.EmbeddingDim)
+	database, err := db.New(ctx, cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("db: %v", err)
 	}
 	defer database.Pool.Close()
 	log.Println("db connected + schema ready")
 
-	st := store.New(database.Pool, crypto.New(cfg.AppSecret))
+	st := store.New(database.Pool)
 	srv := server.New(cfg, st, hub.New())
 
 	r := gin.Default()

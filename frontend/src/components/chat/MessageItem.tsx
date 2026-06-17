@@ -1,5 +1,6 @@
 import { avatarColor, initial } from "@/lib/format";
 import type { Role } from "@/lib/types";
+import Markdown from "./Markdown";
 
 // 一条消息(Slack 风:头像 + 作者 + 内容)。同一作者连续消息分组,只在组首显示头像/作者。
 export default function MessageItem({
@@ -34,8 +35,18 @@ export default function MessageItem({
         {!grouped && (
           <div className="mb-0.5 text-sm font-semibold text-neutral-900">{author}</div>
         )}
-        <div className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-neutral-800">
-          {content || (streaming ? <span className="text-neutral-400">▍</span> : "")}
+        <div className="break-words text-[15px] leading-relaxed text-neutral-800">
+          {content ? (
+            isUser ? (
+              <span className="whitespace-pre-wrap">{content}</span>
+            ) : (
+              <Markdown>{content}</Markdown>
+            )
+          ) : streaming ? (
+            <span className="text-neutral-400">▍</span>
+          ) : (
+            ""
+          )}
         </div>
       </div>
     </div>

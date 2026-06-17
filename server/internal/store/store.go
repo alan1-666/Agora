@@ -6,18 +6,14 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/pgvector/pgvector-go"
-
-	"agora/internal/crypto"
 )
 
 type Store struct {
-	pool   *pgxpool.Pool
-	cipher *crypto.Cipher
+	pool *pgxpool.Pool
 }
 
-func New(pool *pgxpool.Pool, cipher *crypto.Cipher) *Store {
-	return &Store{pool: pool, cipher: cipher}
+func New(pool *pgxpool.Pool) *Store {
+	return &Store{pool: pool}
 }
 
 // ---------- 频道 ----------
@@ -227,91 +223,4 @@ func (s *Store) UpdateAgent(ctx context.Context, id string, a Agent) (Agent, err
 func (s *Store) DeleteAgent(ctx context.Context, id string) error {
 	_, err := s.pool.Exec(ctx, `DELETE FROM agents WHERE id=$1`, id)
 	return err
-}
-
-// ---------- 记忆 / 文档(向量) ----------
-
-func (s *Store) AddMemory(ctx context.Context, content string, vec []float32) error {
-	_, err := s.pool.Exec(ctx,
-		`INSERT INTO memories (content, embedding) VALUES ($1,$2)`,
-		content, pgvector.NewVector(vec))
-	return err
-}
-
-func (s *Store) RetrieveMemories(ctx context.Context, vec []float32, k int) ([]string, error) {
-	rows, err := s.pool.Query(ctx,
-		`SELECT content FROM memories ORDER BY embedding <=> $1 LIMIT $2`,
-		pgvector.NewVector(vec), k)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []string
-	for rows.Next() {
-		var c string
-		if err := rows.Scan(&c); err != nil {
-			return nil, err
-		}
-		out = append(out, c)
-	}
-	return out, rows.Err()
-}
-
-type Doc struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}
-
-func (s *Store) ListDocuments(ctx context.Context) ([]Doc, error) {
-	rows, err := s.pool.Query(ctx, `SELECT id, name FROM documents ORDER BY created_at DESC`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []Doc{}
-	for rows.Next() {
-		var d Doc
-		if err := rows.Scan(&d.ID, &d.Name); err != nil {
-			return nil, err
-		}
-		out = append(out, d)
-	}
-	return out, rows.Err()
-}
-
-func (s *Store) AddDocument(ctx context.Context, name string) (string, error) {
-	var id string
-	err := s.pool.QueryRow(ctx, `INSERT INTO documents (name) VALUES ($1) RETURNING id`, name).Scan(&id)
-	return id, err
-}
-
-func (s *Store) AddChunk(ctx context.Context, docID, docName string, seq int, content string, vec []float32) error {
-	_, err := s.pool.Exec(ctx,
-		`INSERT INTO document_chunks (document_id, doc_name, seq, content, embedding) VALUES ($1,$2,$3,$4,$5)`,
-		docID, docName, seq, content, pgvector.NewVector(vec))
-	return err
-}
-
-type Chunk struct {
-	DocName string
-	Content string
-}
-
-func (s *Store) RetrieveChunks(ctx context.Context, vec []float32, k int) ([]Chunk, error) {
-	rows, err := s.pool.Query(ctx,
-		`SELECT doc_name, content FROM document_chunks ORDER BY embedding <=> $1 LIMIT $2`,
-		pgvector.NewVector(vec), k)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []Chunk
-	for rows.Next() {
-		var c Chunk
-		if err := rows.Scan(&c.DocName, &c.Content); err != nil {
-			return nil, err
-		}
-		out = append(out, c)
-	}
-	return out, rows.Err()
 }

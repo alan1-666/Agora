@@ -5,16 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 
 	"agora/internal/config"
 	"agora/internal/hub"
-	"agora/internal/rag"
 	"agora/internal/runtime"
 	"agora/internal/store"
-	"agora/internal/tools"
 )
 
 type Server struct {
@@ -29,7 +26,7 @@ func New(cfg config.Config, st *store.Store, h *hub.Hub) *Server {
 
 func (s *Server) Routes(r *gin.Engine) {
 	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok", "model": s.cfg.Model})
+		c.JSON(200, gin.H{"status": "ok"})
 	})
 	api := r.Group("/api")
 	api.GET("/runtime", s.runtimeStatus)
@@ -44,12 +41,7 @@ func (s *Server) Routes(r *gin.Engine) {
 	api.GET("/channels/:id/messages", s.listMessages)
 	api.GET("/channels/:id/stream", s.channelStream)
 	api.GET("/threads/:id", s.listThread)
-	api.GET("/documents", s.listDocuments)
-	api.POST("/documents", s.uploadDocument)
-	api.GET("/org/key", s.keyStatus)
-	api.PUT("/org/key", s.setKey)
 	api.POST("/chat/dispatch", s.dispatch)
-	s.registerOAuth(api)
 }
 
 // ---------- tools / agents ----------
@@ -59,35 +51,16 @@ func (s *Server) runtimeStatus(c *gin.Context) {
 	c.JSON(200, gin.H{"available": runtime.Available(), "version": runtime.Version()})
 }
 
-var workerTools = func() []string {
-	var w []string
-	for _, n := range tools.AllNames {
-		if n != "delegate" {
-			w = append(w, n)
-		}
-	}
-	return w
-}()
-
 func (s *Server) seedDefaults(c *gin.Context) ([]store.Agent, error) {
-	worker, err := s.st.CreateAgent(c, store.Agent{
+	a, err := s.st.CreateAgent(c, store.Agent{
 		Name:         "助手",
-		SystemPrompt: "你是 Agora 里的 AI 助手。需要算数、查时间、统计文本时,调用对应工具,不要心算。",
-		Tools:        workerTools,
+		SystemPrompt: "你是 Agora 里的 AI 助手,友好、简洁、直接,用提问者的语言回答。",
+		Tools:        []string{},
 	})
 	if err != nil {
 		return nil, err
 	}
-	coord, err := s.st.CreateAgent(c, store.Agent{
-		Name: "协调者",
-		SystemPrompt: "你是协调者。把复杂任务拆成子任务,用 delegate 工具委派给合适的下属 agent 完成," +
-			"再把结果汇总成清晰的最终答复。可委派的 agent 见下方花名册。",
-		Tools: []string{"delegate", "remember"},
-	})
-	if err != nil {
-		return nil, err
-	}
-	return []store.Agent{worker, coord}, nil
+	return []store.Agent{a}, nil
 }
 
 func (s *Server) listAgents(c *gin.Context) {
@@ -111,13 +84,9 @@ func (s *Server) createAgent(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "参数错误"})
 		return
 	}
-	var clean []string
-	for _, t := range req.Tools {
-		if _, ok := tools.Registry[t]; ok {
-			clean = append(clean, t)
-		}
+	if req.Tools == nil {
+		req.Tools = []string{}
 	}
-	req.Tools = clean
 	a, err := s.st.CreateAgent(c, req)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
@@ -126,23 +95,15 @@ func (s *Server) createAgent(c *gin.Context) {
 	c.JSON(200, a)
 }
 
-func cleanTools(in []string) []string {
-	var out []string
-	for _, t := range in {
-		if _, ok := tools.Registry[t]; ok {
-			out = append(out, t)
-		}
-	}
-	return out
-}
-
 func (s *Server) updateAgent(c *gin.Context) {
 	var req store.Agent
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": "参数错误"})
 		return
 	}
-	req.Tools = cleanTools(req.Tools)
+	if req.Tools == nil {
+		req.Tools = []string{}
+	}
 	a, err := s.st.UpdateAgent(c, c.Param("id"), req)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
@@ -234,80 +195,7 @@ func (s *Server) listThread(c *gin.Context) {
 
 // ---------- documents ----------
 
-func (s *Server) listDocuments(c *gin.Context) {
-	docs, err := s.st.ListDocuments(c)
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(200, docs)
-}
-
-func (s *Server) uploadDocument(c *gin.Context) {
-	var req struct {
-		Name string `json:"name"`
-		Text string `json:"text"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": "参数错误"})
-		return
-	}
-	id, n, err := rag.Ingest(c, s.st, req.Name, req.Text)
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(200, gin.H{"id": id, "name": req.Name, "chunks": n})
-}
-
-// ---------- 模型凭证 ----------
-
-func (s *Server) keyStatus(c *gin.Context) {
-	st, err := s.st.KeyStatus(c)
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(200, st)
-}
-
-func (s *Server) setKey(c *gin.Context) {
-	var req struct {
-		APIKey string `json:"api_key"`
-		Model  string `json:"model"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil || req.APIKey == "" {
-		c.JSON(400, gin.H{"error": "参数错误"})
-		return
-	}
-	if err := s.st.SetAPIKey(c, req.APIKey, req.Model); err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(200, gin.H{"ok": true})
-}
-
-// ---------- 流式对话(经 agent) ----------
-
-func rosterText(agents []store.Agent, exclude string) string {
-	var b strings.Builder
-	first := true
-	for _, a := range agents {
-		if a.Name == exclude {
-			continue
-		}
-		if first {
-			b.WriteString("\n\n【可委派的 agent 花名册】")
-			first = false
-		}
-		sp := a.SystemPrompt
-		if r := []rune(sp); len(r) > 60 {
-			sp = string(r[:60])
-		}
-		b.WriteString("\n- " + a.Name + ":" + sp)
-	}
-	return b.String()
-}
+// ---------- 流式对话(经 claude CLI) ----------
 
 // channelStream 是频道的实时事件流(SSE):订阅 hub,把新消息/agent 活动推给前端。
 func (s *Server) channelStream(c *gin.Context) {

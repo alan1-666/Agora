@@ -1,11 +1,11 @@
 import { API_URL } from "./config";
-import type { Agent, Channel, ChannelEvent, ChatMessage, Doc } from "./types";
+import type { Agent, Channel, ChannelEvent, ChatMessage } from "./types";
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
-  });
+  // 只有带 body 的请求才加 Content-Type;GET 不加,避免触发无谓的 CORS 预检
+  const headers: Record<string, string> = { ...(init?.headers as Record<string, string>) };
+  if (init?.body) headers["Content-Type"] = "application/json";
+  const res = await fetch(`${API_URL}${path}`, { ...init, headers });
   if (!res.ok) throw new Error(await res.text());
   return res.json() as Promise<T>;
 }
@@ -24,7 +24,7 @@ export const openDm = (agentId: string) =>
 // 运行时:Raft 模式靠本机 claude CLI 执行
 export const getRuntimeStatus = () => req<{ available: boolean; version: string }>("/api/runtime");
 
-// agents / 文档
+// agents
 export const listAgents = () => req<Agent[]>("/api/agents");
 export type AgentInput = { name: string; system_prompt: string; model?: string | null; tools: string[] };
 export const createAgent = (a: AgentInput) =>
@@ -33,12 +33,6 @@ export const updateAgent = (id: string, a: AgentInput) =>
   req<Agent>(`/api/agents/${id}`, { method: "PUT", body: JSON.stringify(a) });
 export const deleteAgent = (id: string) =>
   req<{ ok: boolean }>(`/api/agents/${id}`, { method: "DELETE" });
-export const listDocuments = () => req<Doc[]>("/api/documents");
-export const uploadDocument = (name: string, text: string) =>
-  req<{ id: string; name: string; chunks: number }>("/api/documents", {
-    method: "POST",
-    body: JSON.stringify({ name, text }),
-  });
 
 // 派活:把任务交给后端(立即返回),agent 在后台干,结果经频道流推回。
 export const dispatch = (channelId: string, content: string, agentId?: string, threadId?: string) =>

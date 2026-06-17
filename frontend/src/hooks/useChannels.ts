@@ -14,10 +14,10 @@ export function useChannels() {
       await createChannel("general");
       chs = await listChannels();
     }
-    const d = await listDms();
     setChannels(chs);
-    setDms(d);
     setActiveId((cur) => cur ?? chs[0]?.id ?? null);
+    // DM 独立加载,失败不影响频道
+    listDms().then(setDms).catch(console.error);
   }, []);
 
   useEffect(() => {
