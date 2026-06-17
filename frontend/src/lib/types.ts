@@ -21,11 +21,21 @@ export type ChatMessage = {
   seq?: number;
   reply_count?: number;
   parent_id?: string | null;
+  author?: string | null; // 作者(agent 名);user 消息为空
+  relay_from?: string | null; // 因被谁 @ 接力而产生;非接力为空
 };
 
 // 聊天流里的一项:用户/助手消息,或一条工具调用记录。
 export type ChatItem =
-  | { kind: "message"; role: Role; content: string; id?: string; replyCount?: number }
+  | {
+      kind: "message";
+      role: Role;
+      content: string;
+      id?: string;
+      replyCount?: number;
+      author?: string | null;
+      relayFrom?: string | null;
+    }
   | { kind: "tool"; name: string; input: string; output?: string };
 
 // 频道实时事件(派活产生的消息与 agent 活动)

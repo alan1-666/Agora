@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { avatarColor, initial } from "@/lib/format";
 import type { ChatItem } from "@/lib/types";
 import MessageItem from "./MessageItem";
 import ToolRow from "./ToolRow";
@@ -22,6 +23,10 @@ export default function MessageList({
     requestAnimationFrame(() => ref.current?.scrollTo(0, ref.current.scrollHeight));
   }, [items]);
 
+  // 取某项的显示作者:用户=「你」,助手=该条 author(缺省回退到当前接手者名)
+  const authorOf = (it: ChatItem) =>
+    it.kind !== "message" ? "" : it.role === "user" ? "你" : it.author || assistantName;
+
   return (
     <div ref={ref} className="flex-1 overflow-y-auto py-4">
       <div className="px-5 pb-2 text-center text-xs text-neutral-400">
@@ -32,16 +37,22 @@ export default function MessageList({
         if (it.kind === "tool") {
           return <ToolRow key={i} name={it.name} input={it.input} output={it.output} />;
         }
+        const author = authorOf(it);
         const prev = items[i - 1];
-        const grouped = prev?.kind === "message" && prev.role === it.role;
+        const isRelay = !!it.relayFrom;
+        // 同一作者连续消息才分组;接力消息总是独立成段(要显示接力连接)
+        const grouped =
+          !isRelay && prev?.kind === "message" && prev.role === it.role && authorOf(prev) === author;
         const showReply = !inThread && onReply && it.id;
         return (
           <div key={i}>
+            {isRelay && <RelayConnector from={it.relayFrom!} to={author} />}
             <MessageItem
               role={it.role}
-              author={it.role === "user" ? "你" : assistantName}
+              author={author}
               content={it.content}
               grouped={grouped}
+              accent={isRelay}
               streaming={streaming && i === items.length - 1}
             />
             {showReply && (
@@ -67,5 +78,32 @@ export default function MessageList({
         </div>
       )}
     </div>
+  );
+}
+
+// 接力连接器:把「A 接力给 B」显示成一条串(from → to 胶囊,接在被 @ 的消息和接力回复之间)。
+function RelayConnector({ from, to }: { from: string; to: string }) {
+  return (
+    <div className="mt-3 pl-[3.25rem]">
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-brand/20 bg-brand-soft px-2.5 py-1 text-xs font-medium text-brand">
+        <NameDot name={from} />
+        {from}
+        <span className="px-0.5 text-brand/50">→</span>
+        <NameDot name={to} />
+        {to}
+        <span className="ml-0.5 font-normal text-brand/60">接力</span>
+      </span>
+    </div>
+  );
+}
+
+function NameDot({ name }: { name: string }) {
+  return (
+    <span
+      className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white"
+      style={{ background: avatarColor(name) }}
+    >
+      {initial(name)}
+    </span>
   );
 }

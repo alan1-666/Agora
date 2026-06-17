@@ -107,6 +107,8 @@ type Message struct {
 	Seq        int64   `json:"seq"`
 	ReplyCount int     `json:"reply_count"`
 	ParentID   *string `json:"parent_id"`
+	Author     *string `json:"author"`     // 作者(agent 名);user 消息为空
+	RelayFrom  *string `json:"relay_from"` // 因被谁 @ 接力而产生;非接力为空
 }
 
 func scanMessages(rows pgx.Rows) ([]Message, error) {
@@ -114,7 +116,7 @@ func scanMessages(rows pgx.Rows) ([]Message, error) {
 	out := []Message{}
 	for rows.Next() {
 		var m Message
-		if err := rows.Scan(&m.ID, &m.Role, &m.Content, &m.Seq, &m.ReplyCount, &m.ParentID); err != nil {
+		if err := rows.Scan(&m.ID, &m.Role, &m.Content, &m.Seq, &m.ReplyCount, &m.ParentID, &m.Author, &m.RelayFrom); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
@@ -126,7 +128,8 @@ func scanMessages(rows pgx.Rows) ([]Message, error) {
 func (s *Store) ListMessages(ctx context.Context, channelID string) ([]Message, error) {
 	rows, err := s.pool.Query(ctx,
 		`SELECT m.id, m.role, m.content, m.seq,
-		        (SELECT count(*) FROM messages r WHERE r.parent_id = m.id) AS reply_count, m.parent_id
+		        (SELECT count(*) FROM messages r WHERE r.parent_id = m.id) AS reply_count,
+		        m.parent_id, m.author, m.relay_from
 		 FROM messages m WHERE m.channel_id=$1 AND m.parent_id IS NULL ORDER BY m.seq`, channelID)
 	if err != nil {
 		return nil, err
@@ -137,7 +140,7 @@ func (s *Store) ListMessages(ctx context.Context, channelID string) ([]Message, 
 // ListThread 返回某条根消息及其线程内全部回复。
 func (s *Store) ListThread(ctx context.Context, rootID string) ([]Message, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, role, content, seq, 0, parent_id FROM messages
+		`SELECT id, role, content, seq, 0, parent_id, author, relay_from FROM messages
 		 WHERE id=$1 OR parent_id=$1 ORDER BY seq`, rootID)
 	if err != nil {
 		return nil, err
@@ -146,14 +149,15 @@ func (s *Store) ListThread(ctx context.Context, rootID string) ([]Message, error
 }
 
 // AddMessage 写一条消息并返回它(含 id/parent_id,供事件推送)。parentID 非空=线程内回复。
-func (s *Store) AddMessage(ctx context.Context, channelID, role, content string, parentID *string) (Message, error) {
+// author=作者(agent 名,user 消息传 nil);relayFrom=接力来源(非接力传 nil)。
+func (s *Store) AddMessage(ctx context.Context, channelID, role, content string, parentID, author, relayFrom *string) (Message, error) {
 	var m Message
 	err := s.pool.QueryRow(ctx,
-		`INSERT INTO messages (channel_id, seq, role, content, parent_id)
-		 VALUES ($1, (SELECT COALESCE(MAX(seq),0)+1 FROM messages WHERE channel_id=$1), $2, $3, $4)
-		 RETURNING id, role, content, seq, 0, parent_id`,
-		channelID, role, content, parentID).
-		Scan(&m.ID, &m.Role, &m.Content, &m.Seq, &m.ReplyCount, &m.ParentID)
+		`INSERT INTO messages (channel_id, seq, role, content, parent_id, author, relay_from)
+		 VALUES ($1, (SELECT COALESCE(MAX(seq),0)+1 FROM messages WHERE channel_id=$1), $2, $3, $4, $5, $6)
+		 RETURNING id, role, content, seq, 0, parent_id, author, relay_from`,
+		channelID, role, content, parentID, author, relayFrom).
+		Scan(&m.ID, &m.Role, &m.Content, &m.Seq, &m.ReplyCount, &m.ParentID, &m.Author, &m.RelayFrom)
 	return m, err
 }
 

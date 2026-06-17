@@ -8,19 +8,21 @@ export default function MessageItem({
   author,
   content,
   grouped,
+  accent,
   streaming,
 }: {
   role: Role;
   author: string;
   content: string;
   grouped: boolean; // true=承接上一条同作者消息,省略头像/作者
+  accent?: boolean; // true=接力消息,加品牌色左轨,视觉上连成串
   streaming?: boolean;
 }) {
   const isUser = role === "user";
   const bg = isUser ? "#3f3f46" : avatarColor(author);
 
   return (
-    <div className={`flex gap-3 px-5 ${grouped ? "mt-0.5" : "mt-4"}`}>
+    <div className={`flex gap-3 px-5 ${accent ? "mt-1" : grouped ? "mt-0.5" : "mt-4"}`}>
       <div className="w-8 shrink-0">
         {!grouped && (
           <div

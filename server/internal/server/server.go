@@ -327,7 +327,7 @@ func (s *Server) dispatch(c *gin.Context) {
 	if req.ThreadID != "" {
 		parent = &req.ThreadID
 	}
-	userMsg, err := s.st.AddMessage(c, req.ChannelID, "user", req.Content, parent)
+	userMsg, err := s.st.AddMessage(c, req.ChannelID, "user", req.Content, parent, nil, nil)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
@@ -336,13 +336,14 @@ func (s *Server) dispatch(c *gin.Context) {
 
 	c.JSON(202, gin.H{"ok": true})
 
-	go s.runAgentTask(req.ChannelID, req.ThreadID, parent, ag, members, 0, "")
+	go s.runAgentTask(req.ChannelID, req.ThreadID, parent, ag, members, 0, "", "")
 }
 
 const maxRelayHops = 3
 
 // runAgentTask 让某 agent 在频道里干活;若回复里 @了本频道其他成员,自动接力派活(hop 上限防循环)。
-func (s *Server) runAgentTask(channelID, threadID string, parent *string, ag store.Agent, members []store.Agent, hop int, nudge string) {
+// relayFrom 非空表示本次是被该 agent @ 接力触发(用于链路可视化)。
+func (s *Server) runAgentTask(channelID, threadID string, parent *string, ag store.Agent, members []store.Agent, hop int, nudge, relayFrom string) {
 	ctx := context.Background()
 	pub := func(ev hub.Event) { s.hub.Publish(channelID, ev) }
 	pub(hub.Event{"type": "activity", "state": "working", "agent": ag.Name})
@@ -377,18 +378,23 @@ func (s *Server) runAgentTask(channelID, threadID string, parent *string, ag sto
 		return
 	}
 	if answer != "" {
-		if m, e := s.st.AddMessage(ctx, channelID, "assistant", answer, parent); e == nil {
+		author := ag.Name
+		var relayPtr *string
+		if relayFrom != "" {
+			relayPtr = &relayFrom
+		}
+		if m, e := s.st.AddMessage(ctx, channelID, "assistant", answer, parent, &author, relayPtr); e == nil {
 			pub(hub.Event{"type": "message", "message": m})
 		}
 	}
 	pub(hub.Event{"type": "activity", "state": "done"})
 
-	// 接力:回复里 @了本频道其他成员 → 自动派活给 TA
+	// 接力:回复里 @了本频道其他成员 → 自动派活给 TA(记录接力来源=当前 agent)
 	if hop < maxRelayHops && answer != "" {
 		for _, m := range members {
 			if m.Name != ag.Name && strings.Contains(answer, "@"+m.Name) {
 				nudge := "\n\n【接力】你被「" + ag.Name + "」在频道里 @ 了,请基于上文接力处理你那部分,简洁作答。"
-				go s.runAgentTask(channelID, threadID, parent, m, members, hop+1, nudge)
+				go s.runAgentTask(channelID, threadID, parent, m, members, hop+1, nudge, ag.Name)
 			}
 		}
 	}

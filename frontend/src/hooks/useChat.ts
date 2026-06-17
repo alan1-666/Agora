@@ -81,7 +81,16 @@ export function useChat(channelId: string | null, agentId: string, threadId?: st
 
   const items: ChatItem[] = [
     ...messages.map(
-      (m) => ({ kind: "message", role: m.role, content: m.content, id: m.id, replyCount: m.reply_count }) as ChatItem,
+      (m) =>
+        ({
+          kind: "message",
+          role: m.role,
+          content: m.content,
+          id: m.id,
+          replyCount: m.reply_count,
+          author: m.author,
+          relayFrom: m.relay_from,
+        }) as ChatItem,
     ),
     ...live,
   ];
