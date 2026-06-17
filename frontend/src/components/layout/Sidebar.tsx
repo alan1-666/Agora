@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { getKeyStatus } from "@/lib/api";
+import { avatarColor, initial } from "@/lib/format";
 import type { KeyStatus } from "@/lib/types";
 import { useWorkspace } from "@/components/workspace-context";
 
@@ -15,8 +16,9 @@ const NAV = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { channels, activeId, setActiveId, create } = useWorkspace();
+  const { channels, active, activeId, setActiveId, create, agents, openDm } = useWorkspace();
   const [key, setKey] = useState<KeyStatus | null>(null);
+  const activeDmName = active?.kind === "dm" ? active.name : null;
 
   useEffect(() => {
     getKeyStatus().then(setKey).catch(() => {});
@@ -46,22 +48,50 @@ export default function Sidebar() {
           ＋
         </button>
       </div>
-      <nav className="flex-1 space-y-0.5 overflow-y-auto px-2">
-        {channels.map((c) => {
-          const selected = onChat && c.id === activeId;
-          return (
-            <Link
-              key={c.id}
-              href="/chat"
-              onClick={() => setActiveId(c.id)}
-              className={`block truncate rounded-md px-2 py-1.5 text-sm transition-colors ${
-                selected ? "bg-brand/15 font-medium text-brand" : "text-neutral-300 hover:bg-white/5"
-              }`}
-            >
-              <span className="text-neutral-500">#</span> {c.name}
-            </Link>
-          );
-        })}
+      <nav className="flex-1 overflow-y-auto px-2">
+        <div className="space-y-0.5">
+          {channels.map((c) => {
+            const selected = onChat && c.id === activeId;
+            return (
+              <Link
+                key={c.id}
+                href="/chat"
+                onClick={() => setActiveId(c.id)}
+                className={`block truncate rounded-md px-2 py-1.5 text-sm transition-colors ${
+                  selected ? "bg-brand/15 font-medium text-brand" : "text-neutral-300 hover:bg-white/5"
+                }`}
+              >
+                <span className="text-neutral-500">#</span> {c.name}
+              </Link>
+            );
+          })}
+        </div>
+
+        {/* 私信:和某个 AI 成员一对一 */}
+        <div className="mt-4 mb-1 px-2 text-xs font-medium text-neutral-500">私信</div>
+        <div className="space-y-0.5">
+          {agents.map((a) => {
+            const dmActive = onChat && activeId != null && a.name === activeDmName;
+            return (
+              <Link
+                key={a.id}
+                href="/chat"
+                onClick={() => openDm(a.id)}
+                className={`flex items-center gap-2 truncate rounded-md px-2 py-1.5 text-sm transition-colors ${
+                  dmActive ? "bg-brand/15 font-medium text-brand" : "text-neutral-300 hover:bg-white/5"
+                }`}
+              >
+                <span
+                  className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-[9px] font-bold text-white"
+                  style={{ background: avatarColor(a.name) }}
+                >
+                  {initial(a.name)}
+                </span>
+                {a.name}
+              </Link>
+            );
+          })}
+        </div>
       </nav>
 
       {/* 导航 */}

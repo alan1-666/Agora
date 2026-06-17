@@ -2,7 +2,7 @@
 
 export type Role = "user" | "assistant";
 
-export type Channel = { id: string; name: string };
+export type Channel = { id: string; name: string; kind?: string; agent_id?: string | null };
 
 export type Agent = {
   id: string;

@@ -37,6 +37,8 @@ func (s *Server) Routes(r *gin.Engine) {
 	api.DELETE("/agents/:id", s.deleteAgent)
 	api.GET("/channels", s.listChannels)
 	api.POST("/channels", s.createChannel)
+	api.GET("/dms", s.listDMs)
+	api.POST("/dms", s.openDM)
 	api.GET("/channels/:id/messages", s.listMessages)
 	api.GET("/threads/:id", s.listThread)
 	api.GET("/documents", s.listDocuments)
@@ -186,6 +188,31 @@ func (s *Server) createChannel(c *gin.Context) {
 		return
 	}
 	c.JSON(200, ch)
+}
+
+func (s *Server) listDMs(c *gin.Context) {
+	dms, err := s.st.ListDMs(c)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, dms)
+}
+
+func (s *Server) openDM(c *gin.Context) {
+	var req struct {
+		AgentID string `json:"agent_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.AgentID == "" {
+		c.JSON(400, gin.H{"error": "缺少 agent_id"})
+		return
+	}
+	dm, err := s.st.GetOrCreateDM(c, req.AgentID)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, dm)
 }
 
 func (s *Server) listMessages(c *gin.Context) {

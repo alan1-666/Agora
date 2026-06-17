@@ -48,6 +48,9 @@ func (d *DB) initSchema(ctx context.Context, dim int) error {
 			name TEXT NOT NULL DEFAULT 'general',
 			created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 		)`,
+		// DM:kind='dm' 且 agent_id 指向私信对象;普通频道 kind='channel'。
+		`ALTER TABLE channels ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'channel'`,
+		`ALTER TABLE channels ADD COLUMN IF NOT EXISTS agent_id UUID`,
 		`CREATE TABLE IF NOT EXISTS messages (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,

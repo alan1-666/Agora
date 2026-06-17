@@ -23,20 +23,18 @@ func New(pool *pgxpool.Pool, cipher *crypto.Cipher) *Store {
 // ---------- 频道 ----------
 
 type Channel struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID      string  `json:"id"`
+	Name    string  `json:"name"`
+	Kind    string  `json:"kind"`     // channel | dm
+	AgentID *string `json:"agent_id"` // dm 的私信对象
 }
 
-func (s *Store) ListChannels(ctx context.Context) ([]Channel, error) {
-	rows, err := s.pool.Query(ctx, `SELECT id, name FROM channels ORDER BY created_at`)
-	if err != nil {
-		return nil, err
-	}
+func scanChannels(rows pgx.Rows) ([]Channel, error) {
 	defer rows.Close()
-	var out []Channel
+	out := []Channel{}
 	for rows.Next() {
 		var c Channel
-		if err := rows.Scan(&c.ID, &c.Name); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Kind, &c.AgentID); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -44,10 +42,54 @@ func (s *Store) ListChannels(ctx context.Context) ([]Channel, error) {
 	return out, rows.Err()
 }
 
+// ListChannels 只返普通频道(不含 DM)。
+func (s *Store) ListChannels(ctx context.Context) ([]Channel, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, name, kind, agent_id FROM channels WHERE kind='channel' ORDER BY created_at`)
+	if err != nil {
+		return nil, err
+	}
+	return scanChannels(rows)
+}
+
+// ListDMs 返回所有 DM 会话。
+func (s *Store) ListDMs(ctx context.Context) ([]Channel, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, name, kind, agent_id FROM channels WHERE kind='dm' ORDER BY created_at`)
+	if err != nil {
+		return nil, err
+	}
+	return scanChannels(rows)
+}
+
 func (s *Store) CreateChannel(ctx context.Context, name string) (Channel, error) {
+	c := Channel{Kind: "channel"}
+	err := s.pool.QueryRow(ctx,
+		`INSERT INTO channels (name, kind) VALUES ($1, 'channel') RETURNING id, name, kind, agent_id`,
+		name).Scan(&c.ID, &c.Name, &c.Kind, &c.AgentID)
+	return c, err
+}
+
+// GetOrCreateDM 取/建与某 agent 的私信会话(name = agent 名)。
+func (s *Store) GetOrCreateDM(ctx context.Context, agentID string) (Channel, error) {
 	var c Channel
 	err := s.pool.QueryRow(ctx,
-		`INSERT INTO channels (name) VALUES ($1) RETURNING id, name`, name).Scan(&c.ID, &c.Name)
+		`SELECT id, name, kind, agent_id FROM channels WHERE kind='dm' AND agent_id=$1 LIMIT 1`,
+		agentID).Scan(&c.ID, &c.Name, &c.Kind, &c.AgentID)
+	if err == nil {
+		return c, nil
+	}
+	if err != pgx.ErrNoRows {
+		return c, err
+	}
+	// 没有则新建,名字取 agent 名
+	var name string
+	if err := s.pool.QueryRow(ctx, `SELECT name FROM agents WHERE id=$1`, agentID).Scan(&name); err != nil {
+		return c, err
+	}
+	err = s.pool.QueryRow(ctx,
+		`INSERT INTO channels (name, kind, agent_id) VALUES ($1, 'dm', $2) RETURNING id, name, kind, agent_id`,
+		name, agentID).Scan(&c.ID, &c.Name, &c.Kind, &c.AgentID)
 	return c, err
 }
 

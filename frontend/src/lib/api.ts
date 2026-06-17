@@ -17,6 +17,9 @@ export const createChannel = (name: string) =>
 export const listMessages = (channelId: string) =>
   req<ChatMessage[]>(`/api/channels/${channelId}/messages`);
 export const listThread = (rootId: string) => req<ChatMessage[]>(`/api/threads/${rootId}`);
+export const listDms = () => req<Channel[]>("/api/dms");
+export const openDm = (agentId: string) =>
+  req<Channel>("/api/dms", { method: "POST", body: JSON.stringify({ agent_id: agentId }) });
 
 // agents / 文档
 export const listAgents = () => req<Agent[]>("/api/agents");

@@ -1,4 +1,4 @@
-2026/06/17 13:45:25 db connected + schema ready
+2026/06/17 14:18:52 db connected + schema ready
 [GIN-debug] [WARNING] Creating an Engine instance with the Logger and Recovery middleware already attached.
 
 [GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
@@ -13,6 +13,8 @@
 [GIN-debug] DELETE /api/agents/:id           --> agora/internal/server.(*Server).deleteAgent-fm (4 handlers)
 [GIN-debug] GET    /api/channels             --> agora/internal/server.(*Server).listChannels-fm (4 handlers)
 [GIN-debug] POST   /api/channels             --> agora/internal/server.(*Server).createChannel-fm (4 handlers)
+[GIN-debug] GET    /api/dms                  --> agora/internal/server.(*Server).listDMs-fm (4 handlers)
+[GIN-debug] POST   /api/dms                  --> agora/internal/server.(*Server).openDM-fm (4 handlers)
 [GIN-debug] GET    /api/channels/:id/messages --> agora/internal/server.(*Server).listMessages-fm (4 handlers)
 [GIN-debug] GET    /api/threads/:id          --> agora/internal/server.(*Server).listThread-fm (4 handlers)
 [GIN-debug] GET    /api/documents            --> agora/internal/server.(*Server).listDocuments-fm (4 handlers)
@@ -22,26 +24,26 @@
 [GIN-debug] POST   /api/chat/stream          --> agora/internal/server.(*Server).chatStream-fm (4 handlers)
 [GIN-debug] POST   /api/auth/claude/start    --> agora/internal/server.(*Server).claudeStart-fm (4 handlers)
 [GIN-debug] POST   /api/auth/claude/finish   --> agora/internal/server.(*Server).claudeFinish-fm (4 handlers)
-2026/06/17 13:45:25 listening on :8000
+2026/06/17 14:18:52 listening on :8000
 [GIN-debug] [WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.
 Please check https://github.com/gin-gonic/gin/blob/master/docs/doc.md#dont-trust-all-proxies for details.
 [GIN-debug] Listening and serving HTTP on :8000
-[GIN] 2026/06/17 - 13:46:04 | 200 | 208.542µs |             ::1 | GET      "/health"
-[GIN] 2026/06/17 - 13:46:04 | 200 |   5.09ms |             ::1 | GET      "/api/channels"
-[GIN] 2026/06/17 - 13:46:04 | 200 |  12.96ms |             ::1 | POST     "/api/chat/stream"
-[GIN] 2026/06/17 - 13:46:04 | 200 | 869.541µs |             ::1 | GET      "/api/channels/ba9463a8-2ed6-4b61-bb2e-bc0ab46fbbec/messages"
-[GIN] 2026/06/17 - 13:46:04 | 200 |   6.08ms |             ::1 | POST     "/api/chat/stream"
-[GIN] 2026/06/17 - 13:46:04 | 200 | 756.958µs |             ::1 | GET      "/api/channels/ba9463a8-2ed6-4b61-bb2e-bc0ab46fbbec/messages"
-[GIN] 2026/06/17 - 13:46:04 | 200 |    1.1ms |             ::1 | GET      "/api/threads/8f46180c-a87b-404e-a5f0-9463152fbbf9"
-[GIN] 2026/06/17 - 13:46:28 | 204 | 48.625µs |             ::1 | OPTIONS  "/api/org/key"
-[GIN] 2026/06/17 - 13:46:28 | 204 | 29.333µs |             ::1 | OPTIONS  "/api/agents"
-[GIN] 2026/06/17 - 13:46:28 | 204 | 23.292µs |             ::1 | OPTIONS  "/api/channels"
-[GIN] 2026/06/17 - 13:46:28 | 200 |   1.71ms |             ::1 | GET      "/api/org/key"
-[GIN] 2026/06/17 - 13:46:28 | 200 |  23.66ms |             ::1 | GET      "/api/agents"
-[GIN] 2026/06/17 - 13:46:28 | 200 |  24.29ms |             ::1 | GET      "/api/channels"
-[GIN] 2026/06/17 - 13:46:28 | 204 |  7.959µs |             ::1 | OPTIONS  "/api/channels/ba9463a8-2ed6-4b61-bb2e-bc0ab46fbbec/messages"
-[GIN] 2026/06/17 - 13:46:28 | 200 |   2.67ms |             ::1 | GET      "/api/channels/ba9463a8-2ed6-4b61-bb2e-bc0ab46fbbec/messages"
-[GIN] 2026/06/17 - 13:46:31 | 204 | 89.291µs |             ::1 | OPTIONS  "/api/threads/0f897202-f6d0-4582-a77a-081494cf5974"
-[GIN] 2026/06/17 - 13:46:31 | 204 | 15.209µs |             ::1 | OPTIONS  "/api/threads/0f897202-f6d0-4582-a77a-081494cf5974"
-[GIN] 2026/06/17 - 13:46:31 | 200 |   5.97ms |             ::1 | GET      "/api/threads/0f897202-f6d0-4582-a77a-081494cf5974"
-[GIN] 2026/06/17 - 13:46:31 | 200 | 832.042µs |             ::1 | GET      "/api/threads/0f897202-f6d0-4582-a77a-081494cf5974"
+[GIN] 2026/06/17 - 14:19:15 | 200 | 248.75µs |             ::1 | GET      "/health"
+[GIN] 2026/06/17 - 14:19:15 | 200 |   4.31ms |             ::1 | GET      "/api/agents"
+[GIN] 2026/06/17 - 14:19:15 | 200 |   6.15ms |             ::1 | POST     "/api/dms"
+[GIN] 2026/06/17 - 14:19:15 | 200 |   1.11ms |             ::1 | POST     "/api/dms"
+[GIN] 2026/06/17 - 14:19:15 | 200 |    1.4ms |             ::1 | GET      "/api/channels"
+[GIN] 2026/06/17 - 14:19:15 | 200 |   1.41ms |             ::1 | GET      "/api/dms"
+[GIN] 2026/06/17 - 14:19:29 | 204 | 96.625µs |             ::1 | OPTIONS  "/api/agents"
+[GIN] 2026/06/17 - 14:19:29 | 204 | 108.458µs |             ::1 | OPTIONS  "/api/org/key"
+[GIN] 2026/06/17 - 14:19:29 | 204 | 85.291µs |             ::1 | OPTIONS  "/api/channels"
+[GIN] 2026/06/17 - 14:19:29 | 200 |  16.98ms |             ::1 | GET      "/api/org/key"
+[GIN] 2026/06/17 - 14:19:29 | 200 |   31.8ms |             ::1 | GET      "/api/channels"
+[GIN] 2026/06/17 - 14:19:29 | 200 |  31.89ms |             ::1 | GET      "/api/agents"
+[GIN] 2026/06/17 - 14:19:29 | 204 |  4.333µs |             ::1 | OPTIONS  "/api/dms"
+[GIN] 2026/06/17 - 14:19:29 | 200 | 993.875µs |             ::1 | GET      "/api/dms"
+[GIN] 2026/06/17 - 14:19:29 | 204 |  7.958µs |             ::1 | OPTIONS  "/api/channels/ba9463a8-2ed6-4b61-bb2e-bc0ab46fbbec/messages"
+[GIN] 2026/06/17 - 14:19:29 | 200 |   2.01ms |             ::1 | GET      "/api/channels/ba9463a8-2ed6-4b61-bb2e-bc0ab46fbbec/messages"
+[GIN] 2026/06/17 - 14:19:31 | 200 |   2.31ms |             ::1 | POST     "/api/dms"
+[GIN] 2026/06/17 - 14:19:31 | 204 | 18.083µs |             ::1 | OPTIONS  "/api/channels/1e45f83a-95c0-4097-b515-04025a69eac3/messages"
+[GIN] 2026/06/17 - 14:19:31 | 200 | 728.416µs |             ::1 | GET      "/api/channels/1e45f83a-95c0-4097-b515-04025a69eac3/messages"

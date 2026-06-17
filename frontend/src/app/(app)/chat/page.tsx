@@ -11,11 +11,18 @@ import { resolveMention } from "@/lib/format";
 
 export default function ChatPage() {
   const { active, agents, agentId, setAgentId, activeAgent } = useWorkspace();
-  const { items, streaming, send, reload } = useChat(active?.id ?? null, agentId);
-  const assistantName = activeAgent?.name ?? "AI";
+  const isDm = active?.kind === "dm";
+  // DM 锁定为私信对象;普通频道用当前选中成员
+  const effectiveAgentId = isDm ? active?.agent_id ?? "" : agentId;
+  const { items, streaming, send, reload } = useChat(active?.id ?? null, effectiveAgentId);
+  const assistantName = isDm ? active?.name ?? "AI" : activeAgent?.name ?? "AI";
   const [thread, setThread] = useState<{ id: string; preview: string } | null>(null);
 
   function onSend(text: string) {
+    if (isDm) {
+      send(text); // DM 固定对象,不解析 @
+      return;
+    }
     const mentioned = resolveMention(text, agents);
     send(text, mentioned?.id);
   }
@@ -30,10 +37,20 @@ export default function ChatPage() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-5">
           <span className="text-base font-semibold text-neutral-900">
-            <span className="text-neutral-400"># </span>
-            {active?.name ?? "…"}
+            {isDm ? (
+              <>
+                <span className="text-neutral-400">@ </span>
+                {active?.name ?? "…"}
+                <span className="ml-2 text-xs font-normal text-neutral-400">私信</span>
+              </>
+            ) : (
+              <>
+                <span className="text-neutral-400"># </span>
+                {active?.name ?? "…"}
+              </>
+            )}
           </span>
-          <MemberChips agents={agents} selectedId={agentId} onSelect={setAgentId} />
+          {!isDm && <MemberChips agents={agents} selectedId={agentId} onSelect={setAgentId} />}
         </header>
 
         {items.length === 0 && !streaming ? (
@@ -50,7 +67,9 @@ export default function ChatPage() {
         <Composer
           disabled={streaming}
           onSend={onSend}
-          placeholder={`给 #${active?.name ?? ""} 发消息，@成员 可指定接手…`}
+          placeholder={
+            isDm ? `给 ${active?.name ?? ""} 发私信…` : `给 #${active?.name ?? ""} 发消息，@成员 可指定接手…`
+          }
         />
       </div>
 
@@ -58,8 +77,8 @@ export default function ChatPage() {
       {thread && active && (
         <ThreadPanel
           channelId={active.id}
-          agentId={agentId}
-          agents={agents}
+          agentId={effectiveAgentId}
+          agents={isDm ? [] : agents}
           assistantName={assistantName}
           rootId={thread.id}
           rootPreview={thread.preview}
