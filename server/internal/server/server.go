@@ -9,12 +9,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"agora/internal/agent"
 	"agora/internal/config"
 	"agora/internal/hub"
-	"agora/internal/llm"
-	"agora/internal/orchestration"
 	"agora/internal/rag"
+	"agora/internal/runtime"
 	"agora/internal/store"
 	"agora/internal/tools"
 )
@@ -388,75 +386,42 @@ func (s *Server) dispatch(c *gin.Context) {
 	}
 	s.hub.Publish(req.ChannelID, hub.Event{"type": "message", "message": userMsg})
 
-	// 解析鉴权/模型(在请求上下文内,goroutine 用 bg ctx)
-	llmAuth := s.resolveAuth(c)
-	model := s.cfg.Model
-	if st, _ := s.st.KeyStatus(c); st.Model != "" {
-		model = st.Model
-	}
-	if ag.Model != nil && *ag.Model != "" {
+	model := ""
+	if ag.Model != nil {
 		model = *ag.Model
 	}
 
 	c.JSON(202, gin.H{"ok": true})
 
-	// 后台干活
-	go s.runTask(req.ChannelID, req.ThreadID, parent, req.Content, ag, agents, llmAuth, model)
+	// 后台交给本机 claude CLI 干活(用用户订阅,无需 key)
+	go s.runTask(req.ChannelID, req.ThreadID, parent, req.Content, ag.Name, ag.SystemPrompt, model)
 }
 
-func (s *Server) runTask(
-	channelID, threadID string, parent *string, content string,
-	ag store.Agent, agents []store.Agent, llmAuth llm.Auth, model string,
-) {
+func (s *Server) runTask(channelID, threadID string, parent *string, content, agentName, system, model string) {
 	ctx := context.Background()
 	pub := func(ev hub.Event) { s.hub.Publish(channelID, ev) }
-	pub(hub.Event{"type": "activity", "state": "working", "agent": ag.Name})
+	pub(hub.Event{"type": "activity", "state": "working", "agent": agentName})
 
-	// 历史(线程或频道)
+	// 历史(线程或频道)作为上下文,去掉最后一条(就是刚存的当前消息)
 	var history []store.Message
 	if parent != nil {
 		history, _ = s.st.ListThread(ctx, threadID)
 	} else {
 		history, _ = s.st.ListMessages(ctx, channelID)
 	}
-	msgs := make([]map[string]any, 0, len(history))
-	for _, m := range history {
-		msgs = append(msgs, map[string]any{"role": m.Role, "content": m.Content})
-	}
-
-	system := ag.SystemPrompt
-	for _, t := range ag.Tools {
-		if t == "delegate" {
-			system += rosterText(agents, ag.Name)
+	var hist []runtime.Msg
+	for i, m := range history {
+		if i == len(history)-1 {
 			break
 		}
-	}
-	if items, err := rag.Retrieve(ctx, s.st, content, 3, 4); err == nil {
-		system += rag.BuildContext(items)
+		hist = append(hist, runtime.Msg{Role: m.Role, Content: m.Content})
 	}
 
-	runner := orchestration.MakeToolRunner(s.st, llmAuth, model, s.cfg.MaxTokens, 0)
-	answer := ""
-	agent.Run(ctx, agent.Params{
-		Messages: msgs, System: system, ToolNames: ag.Tools,
-		Auth: llmAuth, Model: model, MaxTokens: s.cfg.MaxTokens,
-	}, runner, func(e agent.Event) {
-		switch e.Type {
-		case "delta":
-			pub(hub.Event{"type": "activity", "kind": "delta", "text": e.Text})
-		case "tool_call":
-			pub(hub.Event{"type": "activity", "kind": "tool_call", "name": e.Name, "input": e.Input})
-		case "tool_result":
-			pub(hub.Event{"type": "activity", "kind": "tool_result", "name": e.Name, "output": e.Output})
-		case "final":
-			answer = e.Text
-		case "error":
-			pub(hub.Event{"type": "activity", "kind": "error", "text": e.Text})
-		}
-	})
-
-	if answer != "" {
-		if m, err := s.st.AddMessage(ctx, channelID, "assistant", answer, parent); err == nil {
+	answer, err := runtime.RunClaude(ctx, system, model, hist, content)
+	if err != nil {
+		pub(hub.Event{"type": "activity", "kind": "error", "text": err.Error()})
+	} else if answer != "" {
+		if m, e := s.st.AddMessage(ctx, channelID, "assistant", answer, parent); e == nil {
 			pub(hub.Event{"type": "message", "message": m})
 		}
 	}

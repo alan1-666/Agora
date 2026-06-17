@@ -6,12 +6,7 @@
 - Local:         http://localhost:3000
 - Network:       http://192.168.5.8:3000
 - Environments: .env.local
-✓ Ready in 233ms
+✓ Ready in 382ms
 
- GET /chat 200 in 219ms (next.js: 89ms, application-code: 130ms)
- GET /chat 200 in 27ms (next.js: 6ms, application-code: 21ms)
- GET /chat 200 in 37ms (next.js: 5ms, application-code: 32ms)
-✓ Compiled in 103ms
- GET /chat 200 in 47ms (next.js: 11ms, application-code: 36ms)
- GET /agents 200 in 70ms (next.js: 35ms, application-code: 34ms)
- GET /settings 200 in 54ms (next.js: 21ms, application-code: 33ms)
+ GET /settings 200 in 230ms (next.js: 110ms, application-code: 120ms)
+ GET /chat 200 in 62ms (next.js: 33ms, application-code: 29ms)
