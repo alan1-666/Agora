@@ -40,6 +40,7 @@ func (s *Server) Routes(r *gin.Engine) {
 	api.GET("/channels/:id/members", s.listMembers)
 	api.POST("/channels/:id/members", s.addMember)
 	api.DELETE("/channels/:id/members/:agentId", s.removeMember)
+	api.POST("/channels/:id/coordinator", s.setCoordinator)
 	api.GET("/dms", s.listDMs)
 	api.POST("/dms", s.openDM)
 	api.GET("/channels/:id/messages", s.listMessages)
@@ -214,6 +215,19 @@ func (s *Server) removeMember(c *gin.Context) {
 	c.JSON(200, gin.H{"ok": true})
 }
 
+// setCoordinator 设/取本频道协调者(主 agent)。agent_id 为空=取消。
+func (s *Server) setCoordinator(c *gin.Context) {
+	var req struct {
+		AgentID string `json:"agent_id"`
+	}
+	_ = c.ShouldBindJSON(&req)
+	if err := s.st.SetCoordinator(c, c.Param("id"), req.AgentID); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"ok": true})
+}
+
 func (s *Server) listDMs(c *gin.Context) {
 	dms, err := s.st.ListDMs(c)
 	if err != nil {
@@ -314,12 +328,21 @@ func (s *Server) dispatch(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "该频道没有成员"})
 		return
 	}
+	// 路由:用户指定了成员→直接派给 TA;否则若本频道有协调者→走编排;再否则默认首位成员 + @ 接力。
 	ag := members[0]
+	targeted := false
 	if req.AgentID != "" {
 		for _, a := range members {
 			if a.ID == req.AgentID {
 				ag = a
+				targeted = true
 			}
+		}
+	}
+	var coord *store.Agent
+	for i := range members {
+		if members[i].Role == "coordinator" {
+			coord = &members[i]
 		}
 	}
 
@@ -336,7 +359,11 @@ func (s *Server) dispatch(c *gin.Context) {
 
 	c.JSON(202, gin.H{"ok": true})
 
-	go s.runAgentTask(req.ChannelID, req.ThreadID, parent, ag, members, 0, "", "")
+	if !targeted && coord != nil && len(members) > 1 {
+		go s.runOrchestration(req.ChannelID, req.ThreadID, parent, *coord, members)
+	} else {
+		go s.runAgentTask(req.ChannelID, req.ThreadID, parent, ag, members, 0, "", "")
+	}
 }
 
 const maxRelayHops = 3

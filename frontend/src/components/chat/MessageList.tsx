@@ -8,12 +8,16 @@ import ToolRow from "./ToolRow";
 export default function MessageList({
   items,
   assistantName,
+  coordinatorName,
+  workingName,
   streaming,
   onReply,
   inThread,
 }: {
   items: ChatItem[];
   assistantName: string;
+  coordinatorName?: string | null;
+  workingName?: string;
   streaming: boolean;
   onReply?: (id: string, content: string) => void;
   inThread?: boolean;
@@ -46,7 +50,13 @@ export default function MessageList({
         const showReply = !inThread && onReply && it.id;
         return (
           <div key={i}>
-            {isRelay && <RelayConnector from={it.relayFrom!} to={author} />}
+            {isRelay && (
+              <RelayConnector
+                from={it.relayFrom!}
+                to={author}
+                verb={it.relayFrom === coordinatorName ? "指派" : "接力"}
+              />
+            )}
             <MessageItem
               role={it.role}
               author={author}
@@ -74,15 +84,15 @@ export default function MessageList({
             <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-neutral-400 [animation-delay:-0.1s]" />
             <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-neutral-400" />
           </span>
-          {assistantName} 正在处理…
+          {workingName || assistantName} 正在处理…
         </div>
       )}
     </div>
   );
 }
 
-// 接力连接器:把「A 接力给 B」显示成一条串(from → to 胶囊,接在被 @ 的消息和接力回复之间)。
-function RelayConnector({ from, to }: { from: string; to: string }) {
+// 接力连接器:把「A 接力/指派给 B」显示成一条串(from → to 胶囊,接在上一条与本条之间)。
+function RelayConnector({ from, to, verb }: { from: string; to: string; verb: string }) {
   return (
     <div className="mt-3 pl-[3.25rem]">
       <span className="inline-flex items-center gap-1.5 rounded-full border border-brand/20 bg-brand-soft px-2.5 py-1 text-xs font-medium text-brand">
@@ -91,7 +101,7 @@ function RelayConnector({ from, to }: { from: string; to: string }) {
         <span className="px-0.5 text-brand/50">→</span>
         <NameDot name={to} />
         {to}
-        <span className="ml-0.5 font-normal text-brand/60">接力</span>
+        <span className="ml-0.5 font-normal text-brand/60">{verb}</span>
       </span>
     </div>
   );

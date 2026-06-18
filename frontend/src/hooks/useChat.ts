@@ -13,6 +13,7 @@ export function useChat(channelId: string | null, agentId: string, threadId?: st
   const [messages, setMessages] = useState<ChatMessage[]>([]); // 持久化消息(按作用域)
   const [live, setLive] = useState<ChatItem[]>([]); // 当前这轮的实时活动(delta/工具)
   const [working, setWorking] = useState(false);
+  const [workingName, setWorkingName] = useState(""); // 当前正在干活的 agent(编排时会变)
 
   const inScope = useCallback(
     (m: ChatMessage) =>
@@ -53,6 +54,7 @@ export function useChat(channelId: string | null, agentId: string, threadId?: st
       // activity
       if (ev.state === "working") {
         setWorking(true);
+        setWorkingName(ev.agent ?? "");
         setLive([]);
       } else if (ev.state === "done") {
         // 只停"处理中";不清 live —— 成功时 live 已被最终消息清掉,失败时错误需留着可见
@@ -95,7 +97,7 @@ export function useChat(channelId: string | null, agentId: string, threadId?: st
     ...live,
   ];
 
-  return { items, streaming: working, send, reload: load };
+  return { items, streaming: working, workingName, send, reload: load };
 }
 
 function appendDelta(prev: ChatItem[], text: string): ChatItem[] {

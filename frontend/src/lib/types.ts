@@ -10,6 +10,7 @@ export type Agent = {
   system_prompt: string;
   model: string | null;
   tools: string[];
+  role?: string; // 仅频道成员列表里有值:coordinator | member
 };
 
 export type Doc = { id: string; name: string };

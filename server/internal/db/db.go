@@ -60,6 +60,8 @@ func (d *DB) initSchema(ctx context.Context) error {
 			created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 			PRIMARY KEY (channel_id, agent_id)
 		)`,
+		// 成员角色:coordinator=该频道的协调者(主 agent),其余 member。每频道至多一个协调者。
+		`ALTER TABLE channel_members ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'member'`,
 	}
 	for _, s := range stmts {
 		if _, err := d.Pool.Exec(ctx, s); err != nil {

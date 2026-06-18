@@ -13,12 +13,15 @@ import { resolveMention } from "@/lib/format";
 export default function ChatPage() {
   const { active, agents, agentId, setAgentId } = useWorkspace();
   const isDm = active?.kind === "dm";
-  const { members, add, remove } = useChannelMembers(active?.id ?? null, isDm);
+  const { members, coordinator, add, remove, toggleCoordinator } = useChannelMembers(
+    active?.id ?? null,
+    isDm,
+  );
 
   // 当前接手者:DM 锁定私信对象;频道用选中成员(默认第一个成员)
   const selectedMemberId = members.some((m) => m.id === agentId) ? agentId : members[0]?.id ?? "";
   const effectiveAgentId = isDm ? active?.agent_id ?? "" : selectedMemberId;
-  const { items, streaming, send, reload } = useChat(active?.id ?? null, effectiveAgentId);
+  const { items, streaming, workingName, send, reload } = useChat(active?.id ?? null, effectiveAgentId);
   const assistantName = isDm
     ? active?.name ?? "AI"
     : members.find((m) => m.id === selectedMemberId)?.name ?? "AI";
@@ -60,9 +63,11 @@ export default function ChatPage() {
               members={members}
               agents={agents}
               selectedId={selectedMemberId}
+              coordinatorId={coordinator?.id ?? null}
               onSelect={setAgentId}
               onAdd={add}
               onRemove={remove}
+              onToggleCoordinator={toggleCoordinator}
             />
           )}
         </header>
@@ -73,6 +78,8 @@ export default function ChatPage() {
           <MessageList
             items={items}
             assistantName={assistantName}
+            coordinatorName={coordinator?.name ?? null}
+            workingName={workingName}
             streaming={streaming}
             onReply={(id, content) => setThread({ id, preview: content })}
           />

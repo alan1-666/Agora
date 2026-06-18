@@ -2,21 +2,25 @@ import { useState } from "react";
 import { avatarColor, initial } from "@/lib/format";
 import type { Agent } from "@/lib/types";
 
-// 频道成员条:成员 chips(点选当前接手者)+ 管理弹层(把 agent 加入/移出本频道)。
+// 频道成员条:成员 chips(点选当前接手者,协调者带👑)+ 管理弹层(加入/移出、设/取协调者)。
 export default function MembersBar({
   members,
   agents,
   selectedId,
+  coordinatorId,
   onSelect,
   onAdd,
   onRemove,
+  onToggleCoordinator,
 }: {
   members: Agent[];
   agents: Agent[];
   selectedId: string;
+  coordinatorId: string | null;
   onSelect: (id: string) => void;
   onAdd: (id: string) => void;
   onRemove: (id: string) => void;
+  onToggleCoordinator: (id: string) => void;
 }) {
   const [manage, setManage] = useState(false);
   const inChannel = (id: string) => members.some((m) => m.id === id);
@@ -26,11 +30,12 @@ export default function MembersBar({
       <span className="mr-0.5 text-xs text-neutral-400">成员</span>
       {members.map((a) => {
         const active = a.id === selectedId;
+        const isCoord = a.id === coordinatorId;
         return (
           <button
             key={a.id}
             onClick={() => onSelect(a.id)}
-            title={a.name}
+            title={isCoord ? `${a.name}（协调者）` : a.name}
             className={`flex items-center gap-1.5 rounded-full border py-1 pl-1 pr-2.5 text-xs transition-colors ${
               active
                 ? "border-brand/40 bg-brand-soft font-medium text-brand"
@@ -38,6 +43,7 @@ export default function MembersBar({
             }`}
           >
             <Dot name={a.name} />
+            {isCoord && <span className="-ml-0.5 text-[11px]">👑</span>}
             {a.name}
           </button>
         );
@@ -54,20 +60,41 @@ export default function MembersBar({
         {manage && (
           <>
             <div className="fixed inset-0 z-30" onClick={() => setManage(false)} />
-            <div className="animate-pop absolute right-0 top-9 z-40 w-60 rounded-2xl border border-hairline bg-white p-1.5 shadow-[0_16px_44px_-12px_rgba(19,23,34,0.28)]">
-              <div className="px-2 py-1.5 text-xs text-neutral-400">点选以加入 / 移出本频道</div>
+            <div className="animate-pop absolute right-0 top-9 z-40 w-72 rounded-2xl border border-hairline bg-white p-1.5 shadow-[0_16px_44px_-12px_rgba(19,23,34,0.28)]">
+              <div className="px-2 py-1.5 text-xs text-neutral-400">
+                点选加入 / 移出本频道；👑 设为协调者（主 agent，自动拆活、汇总）
+              </div>
               {agents.map((a) => {
                 const on = inChannel(a.id);
+                const isCoord = a.id === coordinatorId;
                 return (
-                  <button
+                  <div
                     key={a.id}
-                    onClick={() => (on ? onRemove(a.id) : onAdd(a.id))}
-                    className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-black/[0.04]"
+                    className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-black/[0.04]"
                   >
-                    <Dot name={a.name} />
-                    <span className="flex-1 text-left text-neutral-700">{a.name}</span>
-                    {on && <span className="text-brand">✓</span>}
-                  </button>
+                    <button
+                      onClick={() => (on ? onRemove(a.id) : onAdd(a.id))}
+                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    >
+                      <Dot name={a.name} />
+                      <span className="flex-1 truncate text-sm text-neutral-700">{a.name}</span>
+                    </button>
+                    {on && (
+                      <button
+                        onClick={() => onToggleCoordinator(a.id)}
+                        title={isCoord ? "取消协调者" : "设为协调者"}
+                        className={`grid h-6 w-6 place-items-center rounded-md text-xs transition-colors ${
+                          isCoord
+                            ? "bg-brand-soft"
+                            : "opacity-35 grayscale hover:bg-black/[0.04] hover:opacity-100 hover:grayscale-0"
+                        }`}
+                      >
+                        👑
+                      </button>
+                    )}
+                    {on && <span className="w-3 text-brand">✓</span>}
+                    {!on && <span className="w-3" />}
+                  </div>
                 );
               })}
             </div>

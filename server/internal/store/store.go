@@ -169,6 +169,7 @@ type Agent struct {
 	SystemPrompt string   `json:"system_prompt"`
 	Model        *string  `json:"model"`
 	Tools        []string `json:"tools"`
+	Role         string   `json:"role,omitempty"` // 仅在频道成员列表里有值:coordinator | member
 }
 
 func scanAgents(rows pgx.Rows) ([]Agent, error) {
@@ -233,13 +234,36 @@ func (s *Store) DeleteAgent(ctx context.Context, id string) error {
 
 func (s *Store) ListChannelMembers(ctx context.Context, channelID string) ([]Agent, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT a.id, a.name, a.system_prompt, a.model, a.tools
+		`SELECT a.id, a.name, a.system_prompt, a.model, a.tools, m.role
 		 FROM channel_members m JOIN agents a ON a.id = m.agent_id
-		 WHERE m.channel_id=$1 ORDER BY m.created_at`, channelID)
+		 WHERE m.channel_id=$1 ORDER BY (m.role='coordinator') DESC, m.created_at`, channelID)
 	if err != nil {
 		return nil, err
 	}
-	return scanAgents(rows)
+	defer rows.Close()
+	out := []Agent{}
+	for rows.Next() {
+		var a Agent
+		if err := rows.Scan(&a.ID, &a.Name, &a.SystemPrompt, &a.Model, &a.Tools, &a.Role); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// SetCoordinator 把某成员设为协调者(先清掉原协调者);agentID 为空=取消本频道协调者。
+func (s *Store) SetCoordinator(ctx context.Context, channelID, agentID string) error {
+	if _, err := s.pool.Exec(ctx,
+		`UPDATE channel_members SET role='member' WHERE channel_id=$1 AND role='coordinator'`, channelID); err != nil {
+		return err
+	}
+	if agentID == "" {
+		return nil
+	}
+	_, err := s.pool.Exec(ctx,
+		`UPDATE channel_members SET role='coordinator' WHERE channel_id=$1 AND agent_id=$2`, channelID, agentID)
+	return err
 }
 
 func (s *Store) AddChannelMember(ctx context.Context, channelID, agentID string) error {

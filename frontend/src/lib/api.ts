@@ -27,6 +27,12 @@ export const addMember = (channelId: string, agentId: string) =>
   });
 export const removeMember = (channelId: string, agentId: string) =>
   req<{ ok: boolean }>(`/api/channels/${channelId}/members/${agentId}`, { method: "DELETE" });
+// 设/取本频道协调者(主 agent);agentId 传空字符串=取消。
+export const setCoordinator = (channelId: string, agentId: string) =>
+  req<{ ok: boolean }>(`/api/channels/${channelId}/coordinator`, {
+    method: "POST",
+    body: JSON.stringify({ agent_id: agentId }),
+  });
 
 export const listDms = () => req<Channel[]>("/api/dms");
 export const openDm = (agentId: string) =>
